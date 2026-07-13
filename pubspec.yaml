@@ -1,4 +1,4 @@
-name: quant_matrix_app
+name: zeus_workstation
 description: High-Scale Concurrent Quantitative Macro Suite.
 version: 1.0.0+1
 
@@ -9,6 +9,13 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
+
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21

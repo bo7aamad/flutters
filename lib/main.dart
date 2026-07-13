@@ -275,7 +275,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+        title: const Text("ZEUS'S WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
       ),
       body: Padding(
