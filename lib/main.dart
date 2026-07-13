@@ -19,6 +19,8 @@ class QuantWorkstation extends StatefulWidget {
 class _QuantWorkstationState extends State<QuantWorkstation> {
   final TextEditingController _balanceController = TextEditingController(text: "1000");
   final TextEditingController _customTickerController = TextEditingController();
+  final TextEditingController _contactEmailController = TextEditingController();
+  final TextEditingController _contactMessageController = TextEditingController();
   
   bool _isLoading = false;
   String _macroSentiment = "NEUTRAL";
@@ -270,13 +272,169 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     });
   }
 
+  void _submitContactForm() async {
+    String sender = _contactEmailController.text.trim();
+    String msg = _contactMessageController.text.trim();
+    if (sender.isEmpty || msg.isEmpty) return;
+
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Transmitting secure message data row...")));
+
+    try {
+      final response = await http.post(
+        Uri.parse("https://api.web3forms.com/submit"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          // LOCKED: Secure routing vector key successfully injected
+          "access_key": "4601433b-8726-46f0-9268-297df413b19b",
+          "subject": "Quant Lab System Feedback",
+          "from_name": "App User",
+          "email": sender,
+          "message": msg,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        _contactEmailController.clear();
+        _contactMessageController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text("Message successfully routed to M.AlSalamah.")));
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text("Transmission Failure. Key vector configuration mismatch.")));
+    }
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A22),
+        title: const Text("ABOUT QUANT LAB WORKSTATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const SingleChildScrollView(
+          child: Text(
+            "Version 2.0.0\n\nThis workstation functions as an advanced interactive data monitoring terminal running parallel multi-timeframe evaluation routines.\n\nSystem Core Modules:\n• Dual-Timeframe Confluence: Cross-checks 4H execution trends alongside 1D structural frameworks.\n• Momentum Analytics: Computes live 14-period RSI adjustments and 12/26 MACD indicators concurrently.\n• Volatility Sizing Engine: Employs 14-period True Range algorithms to dynamically output lot limits scaled precisely to a 2% maximum risk matrix.",
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CLOSE TERMINAL", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showContactSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A22),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16, right: 16, top: 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("SECURE FEEDBACK LINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contactEmailController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: const InputDecoration(
+                labelText: "Your Email Contact Address",
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contactMessageController,
+              maxLines: 3,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: const InputDecoration(
+                labelText: "Message Body / Bug Logs",
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 45,
+              child: ElevatedButton(
+                onPressed: _submitContactForm,
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A53)),
+                child: const Text("TRANSMIT ENCRYPTED PACKET", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+        title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
+      ),
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF1A1A22),
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(top: 60, bottom: 20, left: 20),
+              color: const Color(0xFF121216),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("QUANT LAB SYSTEM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                  SizedBox(height: 4),
+                  Text("Core Terminal Suite", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics, color: Colors.white70),
+              title: const Text("Market Matrix", style: TextStyle(color: Colors.white)),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: Colors.white70),
+              title: const Text("About Workstation", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.pop(context);
+                _showAboutDialog();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.alternate_email, color: Colors.white70),
+              title: const Text("Contact M.AlSalamah", style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.pop(context);
+                _showContactSheet();
+              },
+            ),
+            const Spacer(),
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text("Version 2.0.0", style: TextStyle(color: Colors.white24, fontSize: 11)),
+            ),
+          ],
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -295,138 +453,4 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(color: const Color(0xFF1A1A22), borderRadius: BorderRadius.circular(8)),
-                  child: Text("MACRO: $_macroSentiment", style: TextStyle(color: _macroSentiment == "BUY" ? Colors.green : (_macroSentiment == "SHORT" ? Colors.red : Colors.amber), fontWeight: FontWeight.bold)),
-                )
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customTickerController, style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: "Inject asset token (e.g. AMD, META)", hintStyle: const TextStyle(color: Colors.grey),
-                      filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _injectAndScanCustomTicker,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text("Scan Ticker", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                )
-              ],
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _executeConcurrentScan,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A53), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("LAUNCH STREAMING QUANT CONFLUENCE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-              ),
-            ),
-            const SizedBox(height: 15),
-            Expanded(
-              child: _calculatedCards.isEmpty 
-                ? const Center(child: Text("Terminals Idle. Awaiting streaming vectors...", style: TextStyle(color: Colors.grey, fontSize: 14)))
-                : ListView.builder(
-                    itemCount: _calculatedCards.length,
-                    itemBuilder: (context, idx) {
-                      final c = _calculatedCards[idx];
-                      bool isBuy = c['rec'] == "BUY"; 
-                      int dec = c['dec'] as int;
-                      double currentPrice = c['cp'] as double;
-                      String assetName = c['name'] as String;
-                      String t1d = c['trend1d'] as String;
-                      String t4h = c['trend4h'] as String;
-                      String macd = c['macd'] as String;
-                      String rsi = c['rsi'].toString();
-                      String bb = c['bbPct'].toString();
-                      String entry = c['entry'].toString();
-                      String sl = c['sl'].toString();
-                      String tp = c['tp'].toString();
-                      String positionSize = c['lots'] as String;
-
-                      return Card(
-                        color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4))),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text(isBuy ? "BUY SIGNAL" : "SHORT SIGNAL", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
-                                ],
-                              ),
-                              const Divider(color: Colors.grey, thickness: 0.3, height: 16),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: t1d == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: " + t1d, style: TextStyle(color: t1d == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: t4h == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: " + t4h, style: TextStyle(color: t4h == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: macd == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: " + macd, style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity, padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0, bottom: 2.0),
-              child: Text(
-                "Built by M.AlSalamah",
-                style: TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.2),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+                
