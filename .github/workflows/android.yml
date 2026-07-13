@@ -23,8 +23,17 @@ jobs:
         flutter-version: '3.19.x'
         channel: 'stable'
 
+    # STEP 1: Save your custom trading code in a temporary backup file
+    - name: Backup Custom Quantitative Code
+      run: cp lib/main.dart main.dart.bak
+
+    # STEP 2: Generate the native folders (this replaces lib/main.dart with the counter app)
     - name: Generate Android Native Templates
       run: flutter create . --overwrite
+
+    # STEP 3: Overwrite the counter app with your custom trading code baseline
+    - name: Restore Custom Quantitative Code
+      run: cp main.dart.bak lib/main.dart
 
     - name: Install Architecture Dependencies
       run: flutter pub get
@@ -37,4 +46,3 @@ jobs:
       with:
         name: Production-Flutter-Package
         path: build/app/outputs/flutter-apk/app-debug.apk
-        
