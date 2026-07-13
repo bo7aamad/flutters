@@ -219,7 +219,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   void _compileRiskCard(Map<String, dynamic> m, double capital) {
-    // HARDENED TYPE CASTING LAYER
     double rsiVal = (m['rsi'] as num).toDouble();
     double bbVal = (m['bbPct'] as num).toDouble();
     double macdVal = (m['macdHist'] as num).toDouble();
@@ -366,27 +365,28 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: (c['trend1d'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: \${c['trend1d']}", style: TextStyle(color: (c['trend1d'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("1D: ${c['trend1d']}", style: TextStyle(color: (c['trend1d'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: (c['trend4h'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: \${c['trend4h']}", style: TextStyle(color: (c['trend4h'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("4H: ${c['trend4h']}", style: TextStyle(color: (c['trend4h'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: (c['macd'] as String) == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: \${c['macd']}", style: TextStyle(color: (c['macd'] as String) == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("MACD: ${c['macd']}", style: TextStyle(color: (c['macd'] as String) == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : \${c['rsi']} | BB Loc : \${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              // FIXED: Restored clean string interpolation pathways without escaping barriers
+                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : ${c['rsi']} | BB Loc : ${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: \${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: ${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: \${c['sl']}", style: const TextStyle(color:
+                 
