@@ -68,7 +68,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
     int total = bull + bear;
     if (total == 0) return "NEUTRAL";
-    // FIXED: Added missing semicolon at the end of this calculation statement
     double score = (bull - bear) / total;
     return score > 0.05 ? "BUY" : (score < -0.05 ? "SHORT" : "NEUTRAL");
   }
@@ -369,7 +368,20 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       );
                     },
                   ),
-            )
+            ),
+            // PROFESSIONAL INTEGRATED WORKSTATION SIGNATURE FOOTER NODE
+            const Padding(
+              padding: EdgeInsets.only(top: 10.0, bottom: 2.0),
+              child: Text(
+                "Built by M.AlSalamah",
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ),
           ],
         ),
       ),
