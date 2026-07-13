@@ -27,13 +27,31 @@ jobs:
     - name: Backup Custom Quantitative Code
       run: cp lib/main.dart main.dart.bak
 
-    # STEP 2: Generate the native folders (this replaces lib/main.dart with the counter app)
+    # STEP 2: Clear out the old config to prevent project naming mismatches
+    - name: Clear Old Config Baselines
+      run: rm -f pubspec.yaml
+
+    # STEP 3: Generate clean native folders matching your exact repository name
     - name: Generate Android Native Templates
       run: flutter create . --overwrite
 
-    # STEP 3: Overwrite the counter app with your custom trading code baseline
+    # STEP 4: Inject the network package safely using official Flutter tools
+    - name: Inject Internet Package Dependency
+      run: flutter pub add http
+
+    # STEP 5: Overwrite the example counter app with your trading workstation code
     - name: Restore Custom Quantitative Code
       run: cp main.dart.bak lib/main.dart
+
+    # STEP 6: Compile the production binary asset layout
+    - name: Compile Native Android Machine Binary
+      run: flutter build apk --debug
+
+    - name: Upload Standalone Mobile Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Production-Flutter-Package
+        path: build/app/outputs/flutter-apk/app-debug.apk
 
     - name: Install Architecture Dependencies
       run: flutter pub get
