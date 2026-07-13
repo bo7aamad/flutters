@@ -394,4 +394,39 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               ),
                               const SizedBox(height: 10),
                               Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(he
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity, padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 8.0, bottom: 2.0),
+              child: Text(
+                "Built by M.AlSalamah",
+                style: TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
