@@ -14,14 +14,11 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '3.19.x', channel: 'stable' }
 
-      - name: Generate and Build
+      - name: Build and Modernize
         run: |
-          flutter create --org com.malsalamah --project-name quant_workstation .
-          flutter pub add http:1.2.0
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
-            sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle
-          fi
+          flutter pub get
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle
           flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
