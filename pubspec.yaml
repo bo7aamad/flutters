@@ -10,11 +10,15 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   flutter_launcher_icons: ^0.13.1
+  flutter_launcher_name: ^0.0.1
 
 flutter:
   uses-material-design: true
 
-flutter_icons:
+flutter_launcher_name:
+  name: "Zeus Workstation"
+
+flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon/app_icon.png"
