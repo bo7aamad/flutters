@@ -22,7 +22,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   
   bool _isLoading = false;
   String _macroSentiment = "NEUTRAL";
-  List<Map<String, dynamic>> _calculatedCards = [];
+  final List<Map<String, dynamic>> _calculatedCards = [];
 
   final Map<String, String> _masterWatchlist = {
     "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
@@ -72,7 +72,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
     int total = bull + bear;
     if (total == 0) return "NEUTRAL";
-    // FIXED: Secured the mandatory closing semicolon on this math statement
     double score = (bull - bear) / total;
     return score > 0.03 ? "BUY" : (score < -0.03 ? "SHORT" : "NEUTRAL");
   }
@@ -383,4 +382,5 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               ),
                               const SizedBox(height: 8),
                               Container(
-                                w
+                                width: double.infinity, padding: const EdgeInsets.all(8),
+              
