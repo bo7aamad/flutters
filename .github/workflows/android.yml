@@ -26,18 +26,18 @@ jobs:
     - name: Backup Custom Quantitative Code
       run: cp lib/main.dart main.dart.bak
 
-    # Completely flushes old cache layouts to avoid compile locks
+    # Fully flushes the repository workspace cache layers to avoid old version blocks
     - name: Clear Old Config Baselines
       run: rm -rf pubspec.yaml android ios web windows macos linux
 
-    # Generates a fresh template with a unique corporate organization name signature
+    # Re-initializes a fresh project configuration blueprint
     - name: Generate Android Native Templates
       run: flutter create --org com.malsalamah --project-name quant_workstation .
 
     - name: Inject Internet Package Dependency
       run: flutter pub add http
 
-    # CRITICAL FIX: Automatically updates the app to target modern Android 15 (API 35) frameworks
+    # Modernizes the internal template architectures to support modern target SDK environments
     - name: Modernize Android Target and Compile SDK Versions
       run: |
         python3 -c "
