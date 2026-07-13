@@ -20,8 +20,7 @@ jobs:
           # 1. Create the Android folder
           flutter create .
           # 2. Set the App Name
-          flutter pub run flutter_launcher_name:main
-          # 3. Set the App Icon
+            # 3. Set the App Icon
           flutter pub run flutter_launcher_icons
           # 4. Patch SDK versions
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
