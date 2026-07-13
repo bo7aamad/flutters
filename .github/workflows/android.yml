@@ -46,7 +46,6 @@ jobs:
                 f.write(content)
         "
 
-    # DIRECT OVERWRITE STEP: Injects the clean workstation code straight into the project baseline
     - name: Write Verified Production Code Base
       run: |
         cat << 'EOF' > lib/main.dart
@@ -400,4 +399,6 @@ jobs:
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
-                      width: double.infinity, height:
+                      width: double.infinity, height: 45,
+                      child: ElevatedButton(
+                        onPressed: _submitContact
