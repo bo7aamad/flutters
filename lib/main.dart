@@ -39,16 +39,21 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
   };
 
+  // HIGH-SCALE MACRO RADAR STREAM ROUTER
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
     final List<String> feeds = [
       "https://finance.yahoo.com/rss/topstories",
-      "https://rss.marketwatch.com/rss/topstories"
+      "https://rss.marketwatch.com/rss/topstories",
+      "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=macroeconomics",
+      "https://www.investing.com/rss/news_285.rss", // Free Forex Desk RSS Channel
+      "https://www.investing.com/rss/news_95.rss",  // Global Economy RSS Channel
+      "https://rsshub.app/twitter/user/Fxhedgsteam", // Open Proxy RSS Bridge for Custom X Timelines
     ];
     
     final RegExp titleRegex = RegExp(r'<title>(.*?)</title>', caseSensitive: false);
-    final List<String> bearWords = ["inflation", "rate hike", "hawkish", "slowdown", "recession", "drop"];
-    final List<String> bullWords = ["rate cut", "dovish", "gdp growth", "demand spike", "rally", "surge"];
+    final List<String> bearWords = ["inflation", "rate hike", "hawkish", "slowdown", "recession", "drop", "bearish", "crash", "contraction"];
+    final List<String> bullWords = ["rate cut", "dovish", "gdp growth", "demand spike", "rally", "surge", "bullish", "expansion"];
 
     for (var url in feeds) {
       try {
@@ -57,7 +62,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
           final matches = titleRegex.allMatches(res.body);
           int count = 0;
           for (var match in matches) {
-            if (count > 4) break;
+            if (count > 8) break;
             String txt = (match.group(1) ?? "").toLowerCase();
             for (var w in bearWords) { if (txt.contains(w)) bear++; }
             for (var w in bullWords) { if (txt.contains(w)) bull++; }
@@ -69,81 +74,113 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     int total = bull + bear;
     if (total == 0) return "NEUTRAL";
     double score = (bull - bear) / total;
-    return score > 0.05 ? "BUY" : (score < -0.05 ? "SHORT" : "NEUTRAL");
+    return score > 0.03 ? "BUY" : (score < -0.03 ? "SHORT" : "NEUTRAL");
   }
 
+  // PARALLEL TIMEFRAME VECTOR PROCESSING UNIT
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
-    final url = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=4h&range=30d";
+    final url4h = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=4h&range=30d";
+    final url1d = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=90d";
+    
     try {
-      final res = await http.get(Uri.parse(url), headers: _headers).timeout(const Duration(seconds: 4));
-      if (res.statusCode != 200) return null;
+      final res4h = await http.get(Uri.parse(url4h), headers: _headers).timeout(const Duration(seconds: 4));
+      final res1d = await http.get(Uri.parse(url1d), headers: _headers).timeout(const Duration(seconds: 4));
       
-      final data = jsonDecode(res.body);
-      final result = data['chart']['result'][0];
-      final indicators = result['indicators']['quote'][0];
+      if (res4h.statusCode != 200 || res1d.statusCode != 200) return null;
       
-      List<double> highs = [];
-      List<double> lows = [];
-      List<double> closes = [];
-      List<dynamic> rawVols = indicators['volume'] ?? [];
+      final data4h = jsonDecode(res4h.body)['chart']['result'][0];
+      final ind4h = data4h['indicators']['quote'][0];
+      List<double> closes4h = _extractCloses(ind4h);
+      
+      final data1d = jsonDecode(res1d.body)['chart']['result'][0];
+      final ind1d = data1d['indicators']['quote'][0];
+      List<double> closes1d = _extractCloses(ind1d);
+      
+      if (closes4h.length < 26 || closes1d.length < 26) return null;
+      double cp = closes4h.last;
 
-      List<dynamic> rawHighs = indicators['high'] ?? [];
-      List<dynamic> rawLows = indicators['low'] ?? [];
-      List<dynamic> rawCloses = indicators['close'] ?? [];
-
-      for (int i = 0; i < rawCloses.length; i++) {
-        if (rawHighs[i] != null && rawLows[i] != null && rawCloses[i] != null) {
-          highs.add((rawHighs[i] as num).toDouble());
-          lows.add((rawLows[i] as num).toDouble());
-          closes.add((rawCloses[i] as num).toDouble());
-        }
+      // 1. MACD Engine Vector Calculation (12, 26, 9)
+      double ema12 = _calculateLastEMA(closes4h, 12);
+      double ema26 = _calculateLastEMA(closes4h, 26);
+      double macdLine = ema12 - ema26;
+      List<double> macdHistory = [];
+      for (int i = 26; i <= closes4h.length; i++) {
+        double e12 = _calculateLastEMA(closes4h.sublist(0, i), 12);
+        double e26 = _calculateLastEMA(closes4h.sublist(0, i), 26);
+        macdHistory.add(e12 - e26);
       }
+      double macdSignal = _calculateLastEMA(macdHistory, 9);
+      double macdHist = macdLine - macdSignal;
 
-      if (closes.length < 21) return null;
-      double cp = closes.last;
+      // 2. Dual Timeframe Confluence Vectors
+      double sma20_4h = _calculateLastSMA(closes4h, 20);
+      double sma20_1d = _calculateLastSMA(closes1d, 20);
+      String trend4h = cp > sma20_4h ? "BULL" : "BEAR";
+      String trend1d = closes1d.last > sma20_1d ? "BULL" : "BEAR";
 
-      double gainSum = 0; double lossSum = 0;
-      for (int i = closes.length - 14; i < closes.length; i++) {
-        double diff = closes[i] - closes[i - 1];
-        if (diff > 0) { gainSum += diff; } else { lossSum -= diff; }
-      }
-      double rs = (gainSum / 14) / math.max(lossSum / 14, 0.00001);
-      double rsi = roundDouble(100 - (100 / (1 + rs)), 1);
-
-      List<double> segment20 = closes.sublist(closes.length - 20);
-      double sma20 = segment20.reduce((a, b) => a + b) / 20;
-      double variance = segment20.map((x) => math.pow(x - sma20, 2)).reduce((a, b) => a + b) / 20;
+      // 3. Classical RSI & Volatility Bands
+      double rsi = _calculateLastRSI(closes4h, 14);
+      List<double> seg20 = closes4h.sublist(closes4h.length - 20);
+      double variance = seg20.map((x) => math.pow(x - sma20_4h, 2)).reduce((a, b) => a + b) / 20;
       double std20 = math.sqrt(variance);
-      double upperBB = sma20 + (std20 * 2);
-      double lowerBB = sma20 - (std20 * 2);
-      double bbPct = roundDouble(((cp - lowerBB) / math.max(upperBB - lowerBB, 0.01)) * 100, 1);
+      double upperBB = sma20_4h + (std20 * 2);
+      double lowerBB = sma20_4h - (std20 * 2);
+      double bbPct = ((cp - lowerBB) / math.max(upperBB - lowerBB, 0.01)) * 100;
 
-      double trSum = 0;
-      for (int i = closes.length - 14; i < closes.length; i++) {
-        double h = highs[i]; double l = lows[i]; double prevC = closes[i - 1];
-        double tr = math.max(h - l, math.max((h - prevC).abs(), (l - prevC).abs()));
-        trSum += tr;
-      }
-      double atr = trSum / 14;
-
-      String rvolStr = "N/A";
-      List<int> validVols = rawVols.where((v) => v != null && v > 0).map((v) => v as int).toList();
-      if (validVols.length >= 20) {
-        double avgVol = validVols.sublist(validVols.length - 20).reduce((a, b) => a + b) / 20;
-        if (avgVol > 0) {
-          rvolStr = "${roundDouble(validVols.last / avgVol, 1)}x";
+      // 4. Clean ATR Channels
+      final indHighs = ind4h['high'] ?? [];
+      final indLows = ind4h['low'] ?? [];
+      double trSum = 0; int count = 0;
+      for (int i = closes4h.length - 14; i < closes4h.length; i++) {
+        if (i < indHighs.length && i < indLows.length && i > 0 && indHighs[i] != null && indLows[i] != null) {
+          double h = (indHighs[i] as num).toDouble();
+          double l = (indLows[i] as num).toDouble();
+          double tr = math.max(h - l, math.max((h - closes4h[i - 1]).abs(), (l - closes4h[i - 1]).abs()));
+          trSum += tr; count++;
         }
       }
+      double atr = count > 0 ? trSum / count : cp * 0.01;
 
-      List<double> range20Highs = highs.sublist(highs.length - 20);
-      List<double> range20Lows = lows.sublist(lows.length - 20);
+      List<double> rawHighs = ind4h['high'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
+      List<double> rawLows = ind4h['low'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
+      double resis = rawHighs.isNotEmpty ? rawHighs.sublist(math.max(0, rawHighs.length - 20)).reduce(math.max) : cp;
+      double supp = rawLows.isNotEmpty ? rawLows.sublist(math.max(0, rawLows.length - 20)).reduce(math.min) : cp;
 
       return {
-        "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "rvol": rvolStr,
-        "techTrend": cp > sma20 ? "BUY" : "SHORT",
-        "resis": range20Highs.reduce(math.max), "supp": range20Lows.reduce(math.min)
+        "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
+        "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp
       };
     } catch (_) { return null; }
+  }
+
+  List<double> _extractCloses(Map<String, dynamic> indicators) {
+    List<dynamic> rawCloses = indicators['close'] ?? [];
+    List<double> closes = [];
+    for (var c in rawCloses) { if (c != null) { closes.add((c as num).toDouble()); } }
+    return closes;
+  }
+
+  double _calculateLastSMA(List<double> data, int period) {
+    if (data.length < period) return data.isEmpty ? 0.0 : data.last;
+    return data.sublist(data.length - period).reduce((a, b) => a + b) / period;
+  }
+
+  double _calculateLastEMA(List<double> data, int period) {
+    if (data.length < period) return data.isEmpty ? 0.0 : data.last;
+    double k = 2 / (period + 1);
+    double ema = data.sublist(0, period).reduce((a, b) => a + b) / period;
+    for (int i = period; i < data.length; i++) { ema = (data[i] * k) + (ema * (1 - k)); }
+    return ema;
+  }
+
+  double _calculateLastRSI(List<double> closes, int period) {
+    if (closes.length <= period) return 50.0;
+    double gainSum = 0; double lossSum = 0;
+    for (int i = closes.length - period; i < closes.length; i++) {
+      double diff = closes[i] - closes[i - 1];
+      if (diff > 0) { gainSum += diff; } else { lossSum -= diff; }
+    }
+    return 100 - (100 / (1 + ((gainSum / period) / math.max(lossSum / period, 0.00001))));
   }
 
   double roundDouble(double val, int places) {
@@ -151,93 +188,81 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return ((val * mod).round().toDouble() / mod);
   }
 
+  // ASYNCHRONOUS LIVE UI STREAMING TRIGGER CONTROLLER
   void _executeConcurrentScan() async {
     setState(() { _isLoading = true; _calculatedCards.clear(); });
     
-    double capital = double.tryParse(_balanceController.text) ?? 1000.0;
     String sentiment = await _calculateMacroSentiment();
     setState(() { _macroSentiment = sentiment; });
+    double capital = double.tryParse(_balanceController.text) ?? 1000.0;
 
-    List<Future<Map<String, dynamic>?>> parallelPipelines = [];
-    _masterWatchlist.forEach((name, ticker) {
-      parallelPipelines.add(_processAssetMetrics(name, ticker));
+    int completedCount = 0;
+    _masterWatchlist.forEach((name, ticker) async {
+      var metrics = await _processAssetMetrics(name, ticker);
+      if (metrics != null && mounted) {
+        setState(() { _compileRiskCard(metrics, capital); });
+      }
+      completedCount++;
+      if (completedCount == _masterWatchlist.length) { setState(() { _isLoading = false; }); }
     });
-
-    final outputArrays = await Future.wait(parallelPipelines);
-
-    for (var metrics in outputArrays) {
-      if (metrics != null) { _compileRiskCard(metrics, capital); }
-    }
-    setState(() { _isLoading = false; });
   }
 
   void _injectAndScanCustomTicker() async {
     String sym = _customTickerController.text.trim().toUpperCase();
     if (sym.isEmpty) return;
-    
     setState(() { _isLoading = true; });
     double capital = double.tryParse(_balanceController.text) ?? 1000.0;
     
     var customMetrics = await _processAssetMetrics(sym, sym);
-    
-    if (customMetrics != null) {
-      setState(() {
-        _compileRiskCard(customMetrics, capital);
-        _customTickerController.clear();
-      });
+    if (customMetrics != null && mounted) {
+      setState(() { _compileRiskCard(customMetrics, capital); _customTickerController.clear(); });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Ticker Verification Failure: Symbol '$sym' unrecognized.")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ticker Verification Failure: Symbol '$sym' unrecognized.")));
     }
     setState(() { _isLoading = false; });
   }
 
   void _compileRiskCard(Map<String, dynamic> m, double capital) {
-    String rsiBias = m['rsi'] < 45 ? "BUY" : (m['rsi'] > 55 ? "SHORT" : "NEUTRAL");
     double score = 0;
-    if (_macroSentiment == "BUY") score += 1; if (_macroSentiment == "SHORT") score -= 1;
-    if (rsiBias == "BUY") score += 1; if (rsiBias == "SHORT") score -= 1;
-    if (m['techTrend'] == "BUY") score += 1.5; else score -= 1.5;
+    if (_macroSentiment == "BUY") score += 1.0; if (_macroSentiment == "SHORT") score -= 1.0;
+    if (m['trend4h'] == "BULL") score += 1.0; else score -= 1.0;
+    if (m['trend1d'] == "BULL") score += 1.5; else score -= 1.5;
+    if (m['macdHist'] > 0) score += 0.5; else score -= 0.5;
+    if (m['rsi'] < 40) score += 1.0; if (m['rsi'] > 60) score -= 1.0;
 
-    String finalRec = score > 0 ? "BUY" : "SHORT";
+    String finalRec = score > 0.5 ? "BUY" : "SHORT";
     String name = m['name'];
     bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || name.contains("NZD");
     int dec = (isFx && !name.contains("JPY")) ? 4 : 2;
 
     double riskCapital = capital * 0.02;
-    double atrBuffer = m['atr'] * 2.2;
-    double entry = 0; double sl = 0; double tp = 0;
+    double atrBuffer = m['atr'] * 2.0;
+    double entry = m['cp']; double sl = 0; double tp = 0;
 
     if (finalRec == "BUY") {
-      entry = roundDouble(m['supp'] * 0.998, dec);
-      sl = roundDouble(entry - atrBuffer, dec);
-      tp = roundDouble(entry + (m['atr'] * 4.0), dec);
+      sl = entry - atrBuffer; tp = entry + (m['atr'] * 3.5);
     } else {
-      entry = roundDouble(m['resis'] * 1.002, dec);
-      sl = roundDouble(entry + atrBuffer, dec);
-      tp = roundDouble(entry - (m['atr'] * 4.0), dec);
+      sl = entry + atrBuffer; tp = entry - (m['atr'] * 3.5);
     }
 
+    entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
     double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
     String lotRecommendation = "";
     
     if (isFx) {
-      double lots = rawUnits / 100000.0;
-      lotRecommendation = "${roundDouble(lots, 2)} Standard Lots";
+      lotRecommendation = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots";
     } else if (name == "GOLD") {
-      double lots = rawUnits / 100.0;
-      lotRecommendation = "${roundDouble(lots, 2)} Contracts (Oz)";
+      lotRecommendation = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)";
     } else if (name == "CRUDE_OIL") {
-      double lots = rawUnits / 1000.0;
-      lotRecommendation = "${roundDouble(lots, 2)} Contracts (Bbl)";
+      lotRecommendation = "${roundDouble(rawUnits / 1000.0, 2)} Contracts (Bbl)";
     } else {
       lotRecommendation = "${rawUnits.round()} Shares / Lots";
     }
 
     _calculatedCards.add({
-      "name": name, "rec": finalRec, "cp": m['cp'], "rsi": m['rsi'], "bbPct": m['bbPct'],
-      "rvol": m['rvol'], "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec
+      "name": name, "rec": finalRec, "cp": m['cp'], "rsi": roundDouble(m['rsi'], 1), "bbPct": roundDouble(m['bbPct'], 1),
+      "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
+      "trend4h": m['trend4h'], "trend1d": m['trend1d'], "macd": m['macdHist'] > 0 ? "BULL" : "BEAR"
     });
   }
 
@@ -246,10 +271,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        title: const Text("QUANT LAB INTERACTIVE MATRIX", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-        backgroundColor: const Color(0xFF1A1A22),
-        centerTitle: true,
-        elevation: 4,
+        title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+        backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -259,15 +282,11 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _balanceController,
-                    keyboardType: TextInputType.number,
+                    controller: _balanceController, keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: "Vault Capital Floor (\$)",
-                      labelStyle: const TextStyle(color: Colors.grey),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A22),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      labelText: "Vault Capital Floor (\$)", labelStyle: const TextStyle(color: Colors.grey),
+                      filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
@@ -284,14 +303,10 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _customTickerController,
-                    style: const TextStyle(color: Colors.white),
+                    controller: _customTickerController, style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: "Add custom ticker (e.g. AMD, META)",
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A22),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      hintText: "Inject asset token (e.g. AMD, META)", hintStyle: const TextStyle(color: Colors.grey),
+                      filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
@@ -305,29 +320,26 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
             ),
             const SizedBox(height: 15),
             SizedBox(
-              width: double.infinity,
-              height: 50,
+              width: double.infinity, height: 50,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _executeConcurrentScan,
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A53), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 child: _isLoading 
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("RUN LIVE CONCURRENT SCAN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                  : const Text("LAUNCH STREAMING QUANT CONFLUENCE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
               ),
             ),
             const SizedBox(height: 15),
             Expanded(
               child: _calculatedCards.isEmpty 
-                ? const Center(child: Text("Workstation Idle. Trigger master scan array.", style: TextStyle(color: Colors.grey, fontSize: 15)))
+                ? const Center(child: Text("Terminals Idle. Awaiting streaming vectors...", style: TextStyle(color: Colors.grey, fontSize: 14)))
                 : ListView.builder(
                     itemCount: _calculatedCards.length,
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
-                      bool isBuy = c['rec'] == "BUY";
-                      int dec = c['dec'];
+                      bool isBuy = c['rec'] == "BUY"; int dec = c['dec'];
                       return Card(
-                        color: const Color(0xFF1A1A22),
-                        margin: const EdgeInsets.only(bottom: 12),
+                        color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4))),
                         child: Padding(
                           padding: const EdgeInsets.all(14.0),
@@ -338,53 +350,38 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(c['name'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text(isBuy ? "BUY LIMIT" : "SHORT TRAP", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
+                                  Text(isBuy ? "BUY SIGNAL" : "SHORT SIGNAL", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
-                              const Divider(color: Colors.grey, thickness: 0.3, height: 20),
-                              Text("• Market Price : \$${c['cp'].toStringAsFixed(dec)} | RSI Momentum : ${c['rsi']} | BB Location : ${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 14)),
-                              const SizedBox(height: 4),
-                              Text("• Flow Volume (RVOL) : ${c['rvol']}", style: const TextStyle(color: Colors.white, fontSize: 14)),
+                              const Divider(color: Colors.grey, thickness: 0.3, height: 16),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: c['trend1d'] == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("1D: ${c['trend1d']}", style: TextStyle(color: c['trend1d'] == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: c['trend4h'] == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("4H: ${c['trend4h']}", style: TextStyle(color: c['trend4h'] == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: c['macd'] == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("MACD: ${c['macd']}", style: TextStyle(color: c['macd'] == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text("• Price : \$${c['cp'].toStringAsFixed(dec)} | RSI : ${c['rsi']} | BB Loc : ${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: ${c['entry'].toStringAsFixed(dec)}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 15),
-                                  Text("SL: ${c['sl'].toStringAsFixed(dec)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 15),
-                                  Text("TP: ${c['tp'].toStringAsFixed(dec)}", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED LOT SIZE: ${c['lots']}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            ),
-            // PROFESSIONAL INTEGRATED WORKSTATION SIGNATURE FOOTER NODE
-            const Padding(
-              padding: EdgeInsets.only(top: 10.0, bottom: 2.0),
-              child: Text(
-                "Built by M.AlSalamah",
-                style: TextStyle(
-                  color: Colors.white38,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+                                  Text("Entry: ${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+                                  Text("SL: ${c['sl']}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+ 
