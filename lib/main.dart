@@ -190,14 +190,17 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double capital = double.tryParse(_balanceController.text) ?? 1000.0;
 
     int completedCount = 0;
-    _masterWatchlist.forEach((name, ticker) async {
-      var metrics = await _processAssetMetrics(name, ticker);
-      if (metrics != null && mounted) {
-        setState(() { _compileRiskCard(metrics, capital); });
-      }
-      completedCount++;
-      if (completedCount == _masterWatchlist.length) { setState(() { _isLoading = false; }); }
-    });
+    for (var entry in _masterWatchlist.entries) {
+      _processAssetMetrics(entry.key, entry.value).then((metrics) {
+        if (metrics != null && mounted) {
+          setState(() { _compileRiskCard(metrics, capital); });
+        }
+        completedCount++;
+        if (completedCount == _masterWatchlist.length) {
+          setState(() { _isLoading = false; });
+        }
+      });
+    }
   }
 
   void _injectAndScanCustomTicker() async {
@@ -382,5 +385,4 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               ),
                               const SizedBox(height: 8),
                               Container(
-                                width: double.infinity, padding: const EdgeInsets.all(8),
-              
+                                width: double.infinity, padding:
