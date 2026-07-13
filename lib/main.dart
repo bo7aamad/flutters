@@ -344,6 +344,17 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       bool isBuy = c['rec'] == "BUY"; 
                       int dec = c['dec'] as int;
                       double currentPrice = c['cp'] as double;
+                      String assetName = c['name'] as String;
+                      String t1d = c['trend1d'] as String;
+                      String t4h = c['trend4h'] as String;
+                      String macd = c['macd'] as String;
+                      String rsi = c['rsi'].toString();
+                      String bb = c['bbPct'].toString();
+                      String entry = c['entry'].toString();
+                      String sl = c['sl'].toString();
+                      String tp = c['tp'].toString();
+                      String positionSize = c['lots'] as String;
+
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4))),
@@ -355,7 +366,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(c['name'] as String, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                  Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                                   Text(isBuy ? "BUY SIGNAL" : "SHORT SIGNAL", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
@@ -364,29 +375,23 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: (c['trend1d'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: ${c['trend1d']}", style: TextStyle(color: (c['trend1d'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: t1d == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("1D: " + t1d, style: TextStyle(color: t1d == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: (c['trend4h'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: ${c['trend4h']}", style: TextStyle(color: (c['trend4h'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: t4h == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("4H: " + t4h, style: TextStyle(color: t4h == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: (c['macd'] as String) == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: ${c['macd']}", style: TextStyle(color: (c['macd'] as String) == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: macd == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("MACD: " + macd, style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              // FIXED: Restored clean string interpolation pathways without escaping barriers
-                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : ${c['rsi']} | BB Loc : ${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text("Entry: ${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                 
+                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              const SizedBox(he
