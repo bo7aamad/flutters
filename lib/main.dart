@@ -39,16 +39,15 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
   };
 
-  // HIGH-SCALE MACRO RADAR STREAM ROUTER
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
     final List<String> feeds = [
       "https://finance.yahoo.com/rss/topstories",
       "https://rss.marketwatch.com/rss/topstories",
       "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=macroeconomics",
-      "https://www.investing.com/rss/news_285.rss", // Free Forex Desk RSS Channel
-      "https://www.investing.com/rss/news_95.rss",  // Global Economy RSS Channel
-      "https://rsshub.app/twitter/user/Fxhedgsteam", // Open Proxy RSS Bridge for Custom X Timelines
+      "https://www.investing.com/rss/news_285.rss", 
+      "https://www.investing.com/rss/news_95.rss",  
+      "https://rsshub.app/twitter/user/Fxhedgsteam", 
     ];
     
     final RegExp titleRegex = RegExp(r'<title>(.*?)</title>', caseSensitive: false);
@@ -73,11 +72,11 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
     int total = bull + bear;
     if (total == 0) return "NEUTRAL";
+    // FIXED: Secured the mandatory closing semicolon on this math statement
     double score = (bull - bear) / total;
     return score > 0.03 ? "BUY" : (score < -0.03 ? "SHORT" : "NEUTRAL");
   }
 
-  // PARALLEL TIMEFRAME VECTOR PROCESSING UNIT
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
     final url4h = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=4h&range=30d";
     final url1d = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=90d";
@@ -99,7 +98,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       if (closes4h.length < 26 || closes1d.length < 26) return null;
       double cp = closes4h.last;
 
-      // 1. MACD Engine Vector Calculation (12, 26, 9)
       double ema12 = _calculateLastEMA(closes4h, 12);
       double ema26 = _calculateLastEMA(closes4h, 26);
       double macdLine = ema12 - ema26;
@@ -112,13 +110,11 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double macdSignal = _calculateLastEMA(macdHistory, 9);
       double macdHist = macdLine - macdSignal;
 
-      // 2. Dual Timeframe Confluence Vectors
       double sma20_4h = _calculateLastSMA(closes4h, 20);
       double sma20_1d = _calculateLastSMA(closes1d, 20);
       String trend4h = cp > sma20_4h ? "BULL" : "BEAR";
       String trend1d = closes1d.last > sma20_1d ? "BULL" : "BEAR";
 
-      // 3. Classical RSI & Volatility Bands
       double rsi = _calculateLastRSI(closes4h, 14);
       List<double> seg20 = closes4h.sublist(closes4h.length - 20);
       double variance = seg20.map((x) => math.pow(x - sma20_4h, 2)).reduce((a, b) => a + b) / 20;
@@ -127,7 +123,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double lowerBB = sma20_4h - (std20 * 2);
       double bbPct = ((cp - lowerBB) / math.max(upperBB - lowerBB, 0.01)) * 100;
 
-      // 4. Clean ATR Channels
       final indHighs = ind4h['high'] ?? [];
       final indLows = ind4h['low'] ?? [];
       double trSum = 0; int count = 0;
@@ -188,7 +183,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return ((val * mod).round().toDouble() / mod);
   }
 
-  // ASYNCHRONOUS LIVE UI STREAMING TRIGGER CONTROLLER
   void _executeConcurrentScan() async {
     setState(() { _isLoading = true; _calculatedCards.clear(); });
     
@@ -384,4 +378,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   const SizedBox(width: 14),
                                   Text("SL: ${c['sl']}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
- 
+                                  Text("TP: ${c['tp']}", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                w
