@@ -24,11 +24,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   String _macroSentiment = "NEUTRAL";
   final List<Map<String, dynamic>> _calculatedCards = [];
 
-  // Cache for network responses
-  final Map<String, Map<String, dynamic>> _metricsCache = {};
-  final Map<String, DateTime> _cacheTimes = {};
-  static const Duration _cacheTTL = Duration(minutes: 5);
-
   final Map<String, String> _masterWatchlist = {
     "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
     "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL", 
@@ -44,40 +39,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
   };
 
-  /// Safe extraction of double values from map with default fallback
-  double _safeDoubleValue(Map<String, dynamic> m, String key, double defaultVal) {
-    try {
-      final val = m[key];
-      if (val is num) return val.toDouble();
-      return defaultVal;
-    } catch (e) {
-      print("Error extracting $key: $e");
-      return defaultVal;
-    }
-  }
-
-  /// Safe extraction of string values from map
-  String _safeStringValue(Map<String, dynamic> m, String key, String defaultVal) {
-    try {
-      final val = m[key];
-      if (val is String) return val;
-      return defaultVal;
-    } catch (e) {
-      print("Error extracting $key: $e");
-      return defaultVal;
-    }
-  }
-
-  /// Check if cached data is still valid
-  bool _isCacheValid(String ticker) {
-    if (!_cacheTimes.containsKey(ticker)) return false;
-    final elapsed = DateTime.now().difference(_cacheTimes[ticker]!);
-    return elapsed < _cacheTTL;
-  }
-
   Future<String> _calculateMacroSentiment() async {
-    int bull = 0; 
-    int bear = 0;
+    int bull = 0; int bear = 0;
     final List<String> feeds = [
       "https://finance.yahoo.com/rss/topstories",
       "https://rss.marketwatch.com/rss/topstories",
@@ -100,18 +63,12 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
           for (var match in matches) {
             if (count > 8) break;
             String txt = (match.group(1) ?? "").toLowerCase();
-            for (var w in bearWords) { 
-              if (txt.contains(w)) bear++; 
-            }
-            for (var w in bullWords) { 
-              if (txt.contains(w)) bull++; 
-            }
+            for (var w in bearWords) { if (txt.contains(w)) bear++; }
+            for (var w in bullWords) { if (txt.contains(w)) bull++; }
             count++;
           }
         }
-      } catch (e) {
-        print("Error fetching feed $url: $e");
-      }
+      } catch (_) {}
     }
     int total = bull + bear;
     if (total == 0) return "NEUTRAL";
@@ -120,11 +77,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
-    // Check cache first
-    if (_isCacheValid(ticker) && _metricsCache.containsKey(ticker)) {
-      return _metricsCache[ticker];
-    }
-
     final url4h = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=4h&range=30d";
     final url1d = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=90d";
     
@@ -132,10 +84,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       final res4h = await http.get(Uri.parse(url4h), headers: _headers).timeout(const Duration(seconds: 4));
       final res1d = await http.get(Uri.parse(url1d), headers: _headers).timeout(const Duration(seconds: 4));
       
-      if (res4h.statusCode != 200 || res1d.statusCode != 200) {
-        print("API error for $ticker: 4h=${res4h.statusCode}, 1d=${res1d.statusCode}");
-        return null;
-      }
+      if (res4h.statusCode != 200 || res1d.statusCode != 200) return null;
       
       final data4h = jsonDecode(res4h.body)['chart']['result'][0];
       final ind4h = data4h['indicators']['quote'][0];
@@ -145,19 +94,19 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       final ind1d = data1d['indicators']['quote'][0];
       List<double> closes1d = _extractCloses(ind1d);
       
-      if (closes4h.length < 26 || closes1d.length < 26) {
-        print("Insufficient data for $ticker: 4h=${closes4h.length}, 1d=${closes1d.length}");
-        return null;
-      }
+      if (closes4h.length < 26 || closes1d.length < 26) return null;
       double cp = closes4h.last;
 
       double ema12 = _calculateLastEMA(closes4h, 12);
       double ema26 = _calculateLastEMA(closes4h, 26);
       double macdLine = ema12 - ema26;
-      
-      // Optimized MACD: calculate incrementally without O(n²) recalculation
-      List<double> macdHistory = _calculateMACDHistory(closes4h);
-      double macdSignal = macdHistory.isNotEmpty ? _calculateLastEMA(macdHistory, 9) : 0.0;
+      List<double> macdHistory = [];
+      for (int i = 26; i <= closes4h.length; i++) {
+        double e12 = _calculateLastEMA(closes4h.sublist(0, i), 12);
+        double e26 = _calculateLastEMA(closes4h.sublist(0, i), 26);
+        macdHistory.add(e12 - e26);
+      }
+      double macdSignal = _calculateLastEMA(macdHistory, 9);
       double macdHist = macdLine - macdSignal;
 
       double sma20_4h = _calculateLastSMA(closes4h, 20);
@@ -175,80 +124,34 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
       final indHighs = ind4h['high'] ?? [];
       final indLows = ind4h['low'] ?? [];
-      double trSum = 0; 
-      int count = 0;
-      for (int i = math.max(0, closes4h.length - 14); i < closes4h.length; i++) {
+      double trSum = 0; int count = 0;
+      for (int i = closes4h.length - 14; i < closes4h.length; i++) {
         if (i < indHighs.length && i < indLows.length && i > 0 && indHighs[i] != null && indLows[i] != null) {
           double h = (indHighs[i] as num).toDouble();
           double l = (indLows[i] as num).toDouble();
           double tr = math.max(h - l, math.max((h - closes4h[i - 1]).abs(), (l - closes4h[i - 1]).abs()));
-          trSum += tr; 
-          count++;
+          trSum += tr; count++;
         }
       }
       double atr = count > 0 ? trSum / count : cp * 0.01;
 
-      List<double> rawHighs = (ind4h['high'] as List?)
-          ?.whereType<num>()
-          .map<double>((x) => x.toDouble())
-          .toList() ?? [];
-      List<double> rawLows = (ind4h['low'] as List?)
-          ?.whereType<num>()
-          .map<double>((x) => x.toDouble())
-          .toList() ?? [];
+      List<double> rawHighs = ind4h['high'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
+      List<double> rawLows = ind4h['low'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
       double resis = rawHighs.isNotEmpty ? rawHighs.sublist(math.max(0, rawHighs.length - 20)).reduce(math.max) : cp;
       double supp = rawLows.isNotEmpty ? rawLows.sublist(math.max(0, rawLows.length - 20)).reduce(math.min) : cp;
 
-      final result = {
+      return {
         "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
         "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp
       };
-
-      // Cache the result
-      _metricsCache[ticker] = result;
-      _cacheTimes[ticker] = DateTime.now();
-
-      return result;
-    } catch (e) {
-      print("Error processing metrics for $ticker: $e");
-      return null;
-    }
-  }
-
-  /// Calculate MACD history more efficiently without O(n²) recalculation
-  List<double> _calculateMACDHistory(List<double> closes) {
-    if (closes.length < 26) return [];
-    
-    List<double> ema12History = _calculateEMAHistory(closes, 12);
-    List<double> ema26History = _calculateEMAHistory(closes, 26);
-    
-    List<double> macdHistory = [];
-    for (int i = 0; i < ema12History.length; i++) {
-      macdHistory.add(ema12History[i] - ema26History[i]);
-    }
-    return macdHistory;
-  }
-
-  /// Calculate full EMA history efficiently
-  List<double> _calculateEMAHistory(List<double> data, int period) {
-    if (data.length < period) return [];
-    
-    List<double> emaHistory = [];
-    double k = 2.0 / (period + 1);
-    double ema = data.sublist(0, period).reduce((a, b) => a + b) / period;
-    
-    for (int i = period; i < data.length; i++) {
-      ema = (data[i] * k) + (ema * (1 - k));
-      emaHistory.add(ema);
-    }
-    return emaHistory;
+    } catch (_) { return null; }
   }
 
   List<double> _extractCloses(Map<String, dynamic> indicators) {
-    return (indicators['close'] as List?)
-        ?.whereType<num>()
-        .map((c) => c.toDouble())
-        .toList() ?? [];
+    List<dynamic> rawCloses = indicators['close'] ?? [];
+    List<double> closes = [];
+    for (var c in rawCloses) { if (c != null) { closes.add((c as num).toDouble()); } }
+    return closes;
   }
 
   double _calculateLastSMA(List<double> data, int period) {
@@ -260,23 +163,16 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (data.length < period) return data.isEmpty ? 0.0 : data.last;
     double k = 2 / (period + 1);
     double ema = data.sublist(0, period).reduce((a, b) => a + b) / period;
-    for (int i = period; i < data.length; i++) { 
-      ema = (data[i] * k) + (ema * (1 - k)); 
-    }
+    for (int i = period; i < data.length; i++) { ema = (data[i] * k) + (ema * (1 - k)); }
     return ema;
   }
 
   double _calculateLastRSI(List<double> closes, int period) {
     if (closes.length <= period) return 50.0;
-    double gainSum = 0; 
-    double lossSum = 0;
+    double gainSum = 0; double lossSum = 0;
     for (int i = closes.length - period; i < closes.length; i++) {
       double diff = closes[i] - closes[i - 1];
-      if (diff > 0) { 
-        gainSum += diff; 
-      } else { 
-        lossSum -= diff; 
-      }
+      if (diff > 0) { gainSum += diff; } else { lossSum -= diff; }
     }
     return 100 - (100 / (1 + ((gainSum / period) / math.max(lossSum / period, 0.00001))));
   }
@@ -287,39 +183,23 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   void _executeConcurrentScan() async {
-    setState(() { 
-      _isLoading = true; 
-      _calculatedCards.clear(); 
-    });
+    setState(() { _isLoading = true; _calculatedCards.clear(); });
     
-    try {
-      String sentiment = await _calculateMacroSentiment();
-      if (!mounted) return;
-      setState(() { _macroSentiment = sentiment; });
-      
-      double capital = double.tryParse(_balanceController.text) ?? 1000.0;
+    String sentiment = await _calculateMacroSentiment();
+    setState(() { _macroSentiment = sentiment; });
+    double capital = double.tryParse(_balanceController.text) ?? 1000.0;
 
-      // Use Future.wait instead of manual counter to avoid race conditions
-      List<Future<Map<String, dynamic>?>> futures = [];
-      for (var entry in _masterWatchlist.entries) {
-        futures.add(_processAssetMetrics(entry.key, entry.value));
-      }
-      
-      List<Map<String, dynamic>?> results = await Future.wait(futures);
-      
-      if (!mounted) return;
-      
-      for (var metrics in results) {
-        if (metrics != null) {
+    int completedCount = 0;
+    for (var entry in _masterWatchlist.entries) {
+      _processAssetMetrics(entry.key, entry.value).then((metrics) {
+        if (metrics != null && mounted) {
           setState(() { _compileRiskCard(metrics, capital); });
         }
-      }
-    } catch (e) {
-      print("Error in concurrent scan: $e");
-    } finally {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-      }
+        completedCount++;
+        if (completedCount == _masterWatchlist.length) {
+          setState(() { _isLoading = false; });
+        }
+      });
     }
   }
 
@@ -327,87 +207,50 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     String sym = _customTickerController.text.trim().toUpperCase();
     if (sym.isEmpty) return;
     setState(() { _isLoading = true; });
+    double capital = double.tryParse(_balanceController.text) ?? 1000.0;
     
-    try {
-      double capital = double.tryParse(_balanceController.text) ?? 1000.0;
-      
-      var customMetrics = await _processAssetMetrics(sym, sym);
-      if (!mounted) return;
-      
-      if (customMetrics != null) {
-        setState(() { 
-          _compileRiskCard(customMetrics, capital); 
-          _customTickerController.clear(); 
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Ticker Verification Failure: Symbol '$sym' unrecognized."))
-        );
-      }
-    } catch (e) {
-      print("Error scanning custom ticker: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}"))
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-      }
+    var customMetrics = await _processAssetMetrics(sym, sym);
+    if (customMetrics != null && mounted) {
+      setState(() { _compileRiskCard(customMetrics, capital); _customTickerController.clear(); });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ticker Verification Failure: Symbol '$sym' unrecognized.")));
     }
+    setState(() { _isLoading = false; });
   }
 
   void _compileRiskCard(Map<String, dynamic> m, double capital) {
-    double rsiVal = _safeDoubleValue(m, 'rsi', 50.0);
-    double bbVal = _safeDoubleValue(m, 'bbPct', 50.0);
-    double macdVal = _safeDoubleValue(m, 'macdHist', 0.0);
-    String t4h = _safeStringValue(m, 'trend4h', 'NEUTRAL');
-    String t1d = _safeStringValue(m, 'trend1d', 'NEUTRAL');
+    double rsiVal = (m['rsi'] as num).toDouble();
+    double bbVal = (m['bbPct'] as num).toDouble();
+    double macdVal = (m['macdHist'] as num).toDouble();
+    String t4h = m['trend4h'] as String;
+    String t1d = m['trend1d'] as String;
 
     double score = 0;
-    if (_macroSentiment == "BUY") score += 1.0; 
-    if (_macroSentiment == "SHORT") score -= 1.0;
+    if (_macroSentiment == "BUY") score += 1.0; if (_macroSentiment == "SHORT") score -= 1.0;
     if (t4h == "BULL") score += 1.0; else score -= 1.0;
     if (t1d == "BULL") score += 1.5; else score -= 1.5;
     if (macdVal > 0) score += 0.5; else score -= 0.5;
-    if (rsiVal < 40) score += 1.0; 
-    if (rsiVal > 60) score -= 1.0;
+    if (rsiVal < 40) score += 1.0; if (rsiVal > 60) score -= 1.0;
 
     String finalRec = score > 0.5 ? "BUY" : "SHORT";
-    String name = _safeStringValue(m, 'name', 'UNKNOWN');
-    bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || 
-                name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || 
-                name.contains("NZD");
+    String name = m['name'] as String;
+    bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || name.contains("NZD");
     int dec = (isFx && !name.contains("JPY")) ? 4 : 2;
 
     double riskCapital = capital * 0.02;
-    double atr = _safeDoubleValue(m, 'atr', 0.01);
-    double atrBuffer = atr * 2.0;
-    double entry = _safeDoubleValue(m, 'cp', 0.0); 
+    double atrBuffer = (m['atr'] as num).toDouble() * 2.0;
+    double entry = (m['cp'] as num).toDouble(); 
     double sl = 0; 
     double tp = 0;
 
     if (finalRec == "BUY") {
-      sl = entry - atrBuffer; 
-      tp = entry + (atr * 3.5);
+      sl = entry - atrBuffer; tp = entry + ((m['atr'] as num).toDouble() * 3.5);
     } else {
-      sl = entry + atrBuffer; 
-      tp = entry - (atr * 3.5);
+      sl = entry + atrBuffer; tp = entry - ((m['atr'] as num).toDouble() * 3.5);
     }
 
-    entry = roundDouble(entry, dec); 
-    sl = roundDouble(sl, dec); 
-    tp = roundDouble(tp, dec);
-    
-    // Validate stop loss distance
-    double slDistance = (entry - sl).abs();
-    if (slDistance < 0.0001) {
-      print("Warning: Stop loss too close to entry for $name. Skipping card.");
-      return;
-    }
-
-    double rawUnits = riskCapital / slDistance;
+    entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
+    double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
     String lotRecommendation = "";
     
     if (isFx) {
@@ -421,8 +264,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
 
     _calculatedCards.add({
-      "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), 
-      "bbPct": roundDouble(bbVal, 1),
+      "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
       "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR"
     });
@@ -433,7 +275,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        title: const Text("ZEUS'S WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+        title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
       ),
       body: Padding(
@@ -456,7 +298,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   decoration: BoxDecoration(color: const Color(0xFF1A1A22), borderRadius: BorderRadius.circular(8)),
-                  child: Text("MACRO: $_macroSentiment", style: TextStyle(color: _macroSentiment == "BUY" ? Colors.green : (_macroSentiment == "SHORT" ? Colors.red : Colors.amber), fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text("MACRO: $_macroSentiment", style: TextStyle(color: _macroSentiment == "BUY" ? Colors.green : (_macroSentiment == "SHORT" ? Colors.red : Colors.amber), fontWeight: FontWeight.bold)),
                 )
               ],
             ),
@@ -534,39 +376,39 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: t1d == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: $t1d", style: TextStyle(color: t1d == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("1D: " + t1d, style: TextStyle(color: t1d == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: t4h == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: $t4h", style: TextStyle(color: t4h == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("4H: " + t4h, style: TextStyle(color: t4h == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: macd == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: $macd", style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text("MACD: " + macd, style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              Text("• Price: \$${currentPrice.toStringAsFixed(dec)} | RSI: $rsi | BB Loc: $bb%", style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: $entry", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: $sl", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("TP: $tp", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity, padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: $positionSize", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                               )
                             ],
                           ),
