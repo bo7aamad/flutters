@@ -219,26 +219,35 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   void _compileRiskCard(Map<String, dynamic> m, double capital) {
+    // HARDENED TYPE CASTING LAYER
+    double rsiVal = (m['rsi'] as num).toDouble();
+    double bbVal = (m['bbPct'] as num).toDouble();
+    double macdVal = (m['macdHist'] as num).toDouble();
+    String t4h = m['trend4h'] as String;
+    String t1d = m['trend1d'] as String;
+
     double score = 0;
     if (_macroSentiment == "BUY") score += 1.0; if (_macroSentiment == "SHORT") score -= 1.0;
-    if (m['trend4h'] == "BULL") score += 1.0; else score -= 1.0;
-    if (m['trend1d'] == "BULL") score += 1.5; else score -= 1.5;
-    if (m['macdHist'] > 0) score += 0.5; else score -= 0.5;
-    if (m['rsi'] < 40) score += 1.0; if (m['rsi'] > 60) score -= 1.0;
+    if (t4h == "BULL") score += 1.0; else score -= 1.0;
+    if (t1d == "BULL") score += 1.5; else score -= 1.5;
+    if (macdVal > 0) score += 0.5; else score -= 0.5;
+    if (rsiVal < 40) score += 1.0; if (rsiVal > 60) score -= 1.0;
 
     String finalRec = score > 0.5 ? "BUY" : "SHORT";
-    String name = m['name'];
+    String name = m['name'] as String;
     bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || name.contains("NZD");
     int dec = (isFx && !name.contains("JPY")) ? 4 : 2;
 
     double riskCapital = capital * 0.02;
-    double atrBuffer = m['atr'] * 2.0;
-    double entry = m['cp']; double sl = 0; double tp = 0;
+    double atrBuffer = (m['atr'] as num).toDouble() * 2.0;
+    double entry = (m['cp'] as num).toDouble(); 
+    double sl = 0; 
+    double tp = 0;
 
     if (finalRec == "BUY") {
-      sl = entry - atrBuffer; tp = entry + (m['atr'] * 3.5);
+      sl = entry - atrBuffer; tp = entry + ((m['atr'] as num).toDouble() * 3.5);
     } else {
-      sl = entry + atrBuffer; tp = entry - (m['atr'] * 3.5);
+      sl = entry + atrBuffer; tp = entry - ((m['atr'] as num).toDouble() * 3.5);
     }
 
     entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
@@ -256,9 +265,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
 
     _calculatedCards.add({
-      "name": name, "rec": finalRec, "cp": m['cp'], "rsi": roundDouble(m['rsi'], 1), "bbPct": roundDouble(m['bbPct'], 1),
+      "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
-      "trend4h": m['trend4h'], "trend1d": m['trend1d'], "macd": m['macdHist'] > 0 ? "BULL" : "BEAR"
+      "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR"
     });
   }
 
@@ -333,7 +342,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                     itemCount: _calculatedCards.length,
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
-                      bool isBuy = c['rec'] == "BUY"; int dec = c['dec'];
+                      bool isBuy = c['rec'] == "BUY"; 
+                      int dec = c['dec'] as int;
+                      double currentPrice = c['cp'] as double;
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4))),
@@ -345,7 +356,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(c['name'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                  Text(c['name'] as String, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                                   Text(isBuy ? "BUY SIGNAL" : "SHORT SIGNAL", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
@@ -354,35 +365,28 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: c['trend1d'] == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: ${c['trend1d']}", style: TextStyle(color: c['trend1d'] == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: (c['trend1d'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("1D: \${c['trend1d']}", style: TextStyle(color: (c['trend1d'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: c['trend4h'] == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: ${c['trend4h']}", style: TextStyle(color: c['trend4h'] == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: (c['trend4h'] as String) == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("4H: \${c['trend4h']}", style: TextStyle(color: (c['trend4h'] as String) == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: c['macd'] == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: ${c['macd']}", style: TextStyle(color: c['macd'] == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(color: (c['macd'] as String) == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("MACD: \${c['macd']}", style: TextStyle(color: (c['macd'] as String) == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              Text("• Price : \$${c['cp'].toStringAsFixed(dec)} | RSI : ${c['rsi']} | BB Loc : ${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : \${c['rsi']} | BB Loc : \${c['bbPct']}%", style: const TextStyle(color: Colors.white, fontSize: 13)),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: ${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: \${c['entry']}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: ${c['sl']}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("TP: ${c['tp']}", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity, padding:
+                                  Text("SL: \${c['sl']}", style: const TextStyle(color:
