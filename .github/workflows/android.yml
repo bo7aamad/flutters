@@ -26,22 +26,43 @@ jobs:
     - name: Backup Custom Quantitative Code
       run: cp lib/main.dart main.dart.bak
 
+    # Completely flushes old cache layouts to avoid compile locks
     - name: Clear Old Config Baselines
-      run: rm -f pubspec.yaml
+      run: rm -rf pubspec.yaml android ios web windows macos linux
 
+    # Generates a fresh template with a unique corporate organization name signature
     - name: Generate Android Native Templates
-      run: flutter create . --overwrite
+      run: flutter create --org com.malsalamah --project-name quant_workstation .
 
     - name: Inject Internet Package Dependency
       run: flutter pub add http
 
+    # CRITICAL FIX: Automatically updates the app to target modern Android 15 (API 35) frameworks
+    - name: Modernize Android Target and Compile SDK Versions
+      run: |
+        python3 -c "
+        import os
+        path = 'android/app/build.gradle'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                content = f.read()
+            content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
+            content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
+            with open(path, 'w') as f:
+                f.write(content)
+        "
+
     - name: Restore Custom Quantitative Code
-      run: cp main.dart.bak lib/main.dart
+      run: |
+        mkdir -p lib
+        cp main.dart.bak lib/main.dart
+
+    - name: Clean Build Cache Environment
+      run: flutter clean
 
     - name: Compile Native Android Machine Binary
       run: flutter build apk --debug
 
-    # FIXED: Added dynamic attempt tagging to prevent 409 immutable upload conflicts
     - name: Upload Standalone Mobile Installer Artifact
       uses: actions/upload-artifact@v4
       with:
