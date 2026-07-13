@@ -8,61 +8,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.19.x', channel: 'stable' }
 
-    - name: Set up Java Development Kit 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Generate Native App Config
+        run: |
+          flutter pub get
+          # 1. Create the Android folder
+          flutter create .
+          # 2. Set the App Name
+          flutter pub run flutter_launcher_name:main
+          # 3. Set the App Icon
+          flutter pub run flutter_launcher_icons
+          # 4. Patch SDK versions
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle
 
-    - name: Set up Google Flutter SDK
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.19.x'
-        channel: 'stable'
+      - name: Build APK
+        run: flutter build apk --debug
 
-    - name: Backup Custom Quantitative Code
-      run: cp lib/main.dart main.dart.bak
-
-    - name: Clear Old Config Baselines
-      run: rm -rf pubspec.yaml android ios web windows macos linux
-
-    - name: Generate Android Native Templates
-      run: flutter create --org com.malsalamah --project-name quant_workstation .
-
-    # FIXED: Hardcoded to version 1.2.0 to guarantee perfect compatibility with Flutter 3.19
-    - name: Inject Internet Package Dependency
-      run: flutter pub add http:1.2.0
-
-    - name: Modernize Android Target and Compile SDK Versions
-      run: |
-        python3 -c "
-        import os
-        path = 'android/app/build.gradle'
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                content = f.read()
-            content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
-            content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
-            with open(path, 'w') as f:
-                f.write(content)
-        "
-
-    - name: Restore Custom Quantitative Code
-      run: |
-        mkdir -p lib
-        cp main.dart.bak lib/main.dart
-
-    - name: Clean Build Cache Environment
-      run: flutter clean
-
-    - name: Compile Native Android Machine Binary
-      run: flutter build apk --debug
-
-    - name: Upload Standalone Mobile Installer Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Production-Flutter-Package-Build-${{ github.run_number }}-${{ github.run_attempt }}
-        path: build/app/outputs/flutter-apk/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeus-workstation
+          path: build/app/outputs/flutter-apk/*.apk
