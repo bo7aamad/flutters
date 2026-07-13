@@ -1,4 +1,5 @@
 name: Build Flutter Production APK
+
 on:
   push:
     branches: [ main ]
@@ -8,44 +9,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Java Development Kit 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Set up Google Flutter SDK
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.19.x'
-        channel: 'stable'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
 
-    - name: Clear Old Config Baselines
-      run: rm -rf pubspec.yaml android ios web windows macos linux
+      - name: Get Dependencies
+        run: flutter pub get
 
-    - name: Generate Android Native Templates
-      run: flutter create --org com.malsalamah --project-name quant_workstation .
+      - name: Modernize Android SDK
+        run: |
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle
 
-    - name: Inject Internet Package Dependency
-      run: flutter pub add http:1.2.0
+      - name: Build Debug APK
+        run: flutter build apk --debug
 
-    - name: Modernize Android Target SDK
-      run: |
-        sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
-        sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle
-
-    - name: Clean Build Cache
-      run: flutter clean
-
-    - name: Compile Native Android Machine Binary
-      run: flutter build apk --debug
-
-    - name: Upload Standalone Mobile Installer Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: quant-workstation-apk
-        path: build/app/outputs/flutter-apk/*.apk
-        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quant-workstation-apk
+          path: build/app/outputs/flutter-apk/*.apk
