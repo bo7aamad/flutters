@@ -49,7 +49,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=macroeconomics",
       "https://www.investing.com/rss/news_285.rss", 
       "https://www.investing.com/rss/news_95.rss",  
-      "https://rsshub.app/twitter/user/Fxhedgsteam", 
+      "https://rsshub.app/twitter/user/Fxhedgsteam"
     ];
     
     final RegExp titleRegex = RegExp(r'<title>(.*?)</title>', caseSensitive: false);
@@ -285,7 +285,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
         Uri.parse("https://api.web3forms.com/submit"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          // LOCKED: Secure routing vector key successfully injected
           "access_key": "4601433b-8726-46f0-9268-297df413b19b",
           "subject": "Quant Lab System Feedback",
           "from_name": "App User",
@@ -453,4 +452,5 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                
+                Container(
+                  padding: const EdgeInsets.symmetric(horizo
