@@ -235,14 +235,29 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return ema;
   }
 
+  // UPDATED: Wilder's Smoothed RSI Math Fix
   double _calculateLastRSI(List<double> closes, int period) {
     if (closes.length <= period) return 50.0;
-    double gainSum = 0; double lossSum = 0;
-    for (int i = closes.length - period; i < closes.length; i++) {
+    
+    double gainSum = 0.0; double lossSum = 0.0;
+    for (int i = 1; i <= period; i++) {
       double diff = closes[i] - closes[i - 1];
-      if (diff > 0) { gainSum += diff; } else { lossSum -= diff; }
+      if (diff > 0) gainSum += diff; else lossSum -= diff;
     }
-    return 100 - (100 / (1 + ((gainSum / period) / math.max(lossSum / period, 0.00001))));
+    double avgGain = gainSum / period;
+    double avgLoss = lossSum / period;
+
+    for (int i = period + 1; i < closes.length; i++) {
+      double diff = closes[i] - closes[i - 1];
+      double gain = diff > 0 ? diff : 0.0;
+      double loss = diff < 0 ? -diff : 0.0;
+      avgGain = ((avgGain * (period - 1)) + gain) / period;
+      avgLoss = ((avgLoss * (period - 1)) + loss) / period;
+    }
+    
+    if (avgLoss == 0) return 100.0;
+    double rs = avgGain / avgLoss;
+    return 100.0 - (100.0 / (1 + rs));
   }
 
   double roundDouble(double val, int places) {
@@ -339,9 +354,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     }
 
     entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
-    double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
-    String lotRec = "";
     
+    // UPDATED: Position Sizing Math Fix (Includes JPY override)
+    double riskDistance = math.max((entry - sl).abs(), 0.00001);
+    double rawUnits = riskCapital / riskDistance;
+    if (name.contains("JPY")) { rawUnits = rawUnits * entry; }
+
+    String lotRec = "";
     if (finalRec.contains("WAIT")) { lotRec = "STANDBY - NO ENTRY"; } 
     else if (isFx) { lotRec = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots"; } 
     else if (name == "GOLD") { lotRec = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)"; } 
