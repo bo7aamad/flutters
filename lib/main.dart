@@ -47,9 +47,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
   final Map<String, String> _headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"};
 
-  // --------------------------------------------------------
-  // ACTIVE API KEYS (Twelve Data & FMP)
-  // --------------------------------------------------------
   final String _tdApiKey = "a9eeefb4ba19452b91adb75330fb05ae";
   final String _fmpApiKey = "pBDGnhUIlqmO80RrVIAa9YSROILUApn"; 
 
@@ -106,10 +103,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
+    // FIX: Restored all 6 feeds so Macro works perfectly again
     final List<String> feeds = [
-      "https://finance.yahoo.com/rss/topstories", "https://rss.marketwatch.com/rss/topstories",
+      "https://finance.yahoo.com/rss/topstories", 
+      "https://rss.marketwatch.com/rss/topstories",
       "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=macroeconomics",
-      "https://www.investing.com/rss/news_285.rss", "https://www.investing.com/rss/news_95.rss",
+      "https://www.investing.com/rss/news_285.rss", 
+      "https://www.investing.com/rss/news_95.rss",  
+      "https://rsshub.app/twitter/user/Fxhedgsteam", 
     ];
     final RegExp titleRegex = RegExp(r'<title>(.*?)</title>', caseSensitive: false);
     final List<String> bearWords = ["inflation", "rate hike", "hawkish", "slowdown", "recession", "drop", "bearish", "crash", "contraction"];
@@ -302,19 +303,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
-    String finalRec = "WAIT";
-    if (score >= 2.0) finalRec = "BUY";
-    else if (score <= -2.0) finalRec = "SHORT";
+    String finalRec = "WAIT (SCORE: ${score.toStringAsFixed(1)})";
+    if (score >= 1.5) finalRec = "BUY";
+    else if (score <= -1.5) finalRec = "SHORT";
 
-    if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
-    if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
-    if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
+    // X-RAY TRANSPARENCY
+    if (finalRec == "BUY" && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
+    if (finalRec == "SHORT" && t1d == "BULL") finalRec = "WAIT (1D-BULL)";
+    if (vTrend == "LOW" && (finalRec == "BUY" || finalRec == "SHORT")) finalRec = "WAIT (LOW VOL)";
     
-    // EARNINGS OVERRIDE
     bool hasEarnings = _earningsRiskList.contains(ticker.split("/")[0]);
     if (hasEarnings) { finalRec = "WAIT (EARNINGS)"; }
 
-    // NOTIFICATIONS DISPATCH
     if ((finalRec == "BUY" || finalRec == "SHORT") && _watchdogActive) {
       _sendPushAlert("QUANT SIGNAL: $finalRec", "${m['name']} Confluence Score: ${score.toStringAsFixed(1)}");
     }
@@ -434,9 +434,10 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                     itemCount: _calculatedCards.length,
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
-                      bool isBuy = c['rec'] == "BUY"; 
-                      bool isWait = c['rec'].toString().contains("WAIT");
-                      bool isEarnings = c['rec'] == "WAIT (EARNINGS)";
+                      String finalRec = c['rec'] as String;
+                      bool isBuy = finalRec == "BUY"; 
+                      bool isShort = finalRec == "SHORT";
+                      bool isEarnings = finalRec.contains("EARNINGS");
                       int dec = c['dec'] as int;
                       double currentPrice = c['cp'] as double;
                       String assetName = c['name'] as String;
@@ -450,10 +451,12 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       String sl = c['sl'].toString();
                       String tp = c['tp'].toString();
                       String positionSize = c['lots'] as String;
-                      String scoreStr = (c['score'] as double).toStringAsFixed(1);
                       List<double> sparklineData = c['sparkline'] as List<double>;
 
-                      Color sigColor = isEarnings ? Colors.amber : (isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent));
+                      Color sigColor = Colors.blueGrey[300]!; 
+                      if (isBuy) sigColor = Colors.greenAccent;
+                      else if (isShort) sigColor = Colors.redAccent;
+                      else if (isEarnings) sigColor = Colors.amber;
 
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
@@ -471,12 +474,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                                   const Spacer(),
                                   SizedBox(
-                                    width: 80, height: 25,
-                                    child: CustomPaint(painter: SparklinePainter(sparklineData, sigColor)),
+                                    width: 80, height: 30,
+                                    child: CustomPaint(
+                                      size: const Size(80, 30),
+                                      painter: SparklinePainter(sparklineData, sigColor)
+                                    ),
                                   ),
                                   const SizedBox(width: 14),
-                                  Text(isEarnings ? "WAIT (EARNINGS)" : (isWait ? "WAIT ($scoreStr)" : (isBuy ? "BUY ($scoreStr)" : "SHORT ($scoreStr)")), 
-                                       style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text(finalRec, style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const Divider(color: Colors.grey, thickness: 0.3, height: 16),
@@ -512,18 +517,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: " + entry, style: TextStyle(color: isWait ? Colors.grey : Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: TextStyle(color: isWait ? Colors.grey : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: TextStyle(color: isWait ? Colors.grey : Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity, padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: TextStyle(color: isWait ? Colors.grey : Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                               )
                             ],
                           ),
@@ -556,15 +561,22 @@ class SparklinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (data.isEmpty) return;
 
-    final double min = data.reduce(math.min);
-    final double max = data.reduce(math.max);
+    List<double> cleanData = [];
+    double lastValid = data.firstWhere((e) => e > 0, orElse: () => 1.0);
+    for (double d in data) {
+      if (d > 0) { cleanData.add(d); lastValid = d; }
+      else { cleanData.add(lastValid); }
+    }
+
+    final double min = cleanData.reduce(math.min);
+    final double max = cleanData.reduce(math.max);
     final double range = (max - min) == 0 ? 1 : (max - min);
-    final double xStep = size.width / (data.length - 1);
+    final double xStep = size.width / (cleanData.length - 1);
 
     final Path linePath = Path();
-    for (int i = 0; i < data.length; i++) {
+    for (int i = 0; i < cleanData.length; i++) {
       final double x = i * xStep;
-      final double y = size.height - ((data[i] - min) / range * size.height);
+      final double y = size.height - ((cleanData[i] - min) / range * size.height);
       if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
     }
 
@@ -583,7 +595,7 @@ class SparklinePainter extends CustomPainter {
       
     final Paint linePaint = Paint()
       ..color = color
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
