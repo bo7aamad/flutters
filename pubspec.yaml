@@ -19,3 +19,7 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/icon/app_icon.png"
   min_sdk_android: 21
+
+  flutter_launcher_name: ^0.0.1
+  flutter_local_notifications: ^17.0.1   # NEW: Push Notifications
+  intl: ^0.19.0                          # NEW: Date Formatting for Earnings
