@@ -140,9 +140,17 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double resis = rawHighs.isNotEmpty ? rawHighs.sublist(math.max(0, rawHighs.length - 20)).reduce(math.max) : cp;
       double supp = rawLows.isNotEmpty ? rawLows.sublist(math.max(0, rawLows.length - 20)).reduce(math.min) : cp;
 
+      // Volume Extraction and Processing
+      final indVol = ind4h['volume'] ?? [];
+      List<double> vols = [];
+      for (var v in indVol) { if (v != null) vols.add((v as num).toDouble()); }
+      double currentVol = vols.isNotEmpty ? vols.last : 0;
+      double smaVol20 = _calculateLastSMA(vols, 20);
+      String volTrend = (currentVol > smaVol20 && currentVol > 0) ? "HIGH" : "LOW";
+
       return {
         "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
-        "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp
+        "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend
       };
     } catch (_) { return null; }
   }
@@ -224,6 +232,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double macdVal = (m['macdHist'] as num).toDouble();
     String t4h = m['trend4h'] as String;
     String t1d = m['trend1d'] as String;
+    String vTrend = (m['volTrend'] ?? "LOW") as String;
 
     double score = 0;
     if (_macroSentiment == "BUY") score += 1.0; if (_macroSentiment == "SHORT") score -= 1.0;
@@ -231,29 +240,56 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (t1d == "BULL") score += 1.5; else score -= 1.5;
     if (macdVal > 0) score += 0.5; else score -= 0.5;
     if (rsiVal < 40) score += 1.0; if (rsiVal > 60) score -= 1.0;
+    
+    // UPGRADE 2: Bollinger Penalty (Penalize buying the absolute top, shorting absolute bottom)
+    if (bbVal > 80) score -= 1.0;
+    if (bbVal < 20) score += 1.0;
 
-    String finalRec = score > 0.5 ? "BUY" : "SHORT";
+    // UPGRADE 1: WAIT / NEUTRAL Zone (Require strong confluence to issue signal)
+    String finalRec = "WAIT";
+    if (score >= 2.5) finalRec = "BUY";
+    else if (score <= -2.5) finalRec = "SHORT";
+
+    // UPGRADE 3: Golden Confluence Hard-Filter (Never trade against 1D trend)
+    if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
+    if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
+
+    // UPGRADE 4: Volume Verification (Ignore breakouts on low volume)
+    if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
+
     String name = m['name'] as String;
     bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || name.contains("NZD");
     int dec = (isFx && !name.contains("JPY")) ? 4 : 2;
 
     double riskCapital = capital * 0.02;
-    double atrBuffer = (m['atr'] as num).toDouble() * 2.0;
+    double atrVal = (m['atr'] as num).toDouble();
     double entry = (m['cp'] as num).toDouble(); 
+    double supp = (m['supp'] as num).toDouble();
+    double resis = (m['resis'] as num).toDouble();
     double sl = 0; 
     double tp = 0;
 
     if (finalRec == "BUY") {
-      sl = entry - atrBuffer; tp = entry + ((m['atr'] as num).toDouble() * 3.5);
+      // UPGRADE 2: Support-Based dynamic Stop Loss
+      sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); 
+      tp = entry + ((entry - sl).abs() * 2.0); // Minimum 1:2 R:R Ratio
+    } else if (finalRec == "SHORT") {
+      // UPGRADE 2: Resistance-Based dynamic Stop Loss
+      sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); 
+      tp = entry - ((sl - entry).abs() * 2.0);
     } else {
-      sl = entry + atrBuffer; tp = entry - ((m['atr'] as num).toDouble() * 3.5);
+      // Background math placeholder for WAIT mode
+      sl = entry - (atrVal * 2.0); 
+      tp = entry + (atrVal * 2.0);
     }
 
     entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
     double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
     String lotRecommendation = "";
     
-    if (isFx) {
+    if (finalRec == "WAIT") {
+      lotRecommendation = "STANDBY - NO ENTRY";
+    } else if (isFx) {
       lotRecommendation = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots";
     } else if (name == "GOLD") {
       lotRecommendation = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)";
@@ -266,7 +302,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     _calculatedCards.add({
       "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
-      "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR"
+      "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend
     });
   }
 
@@ -342,12 +378,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
                       bool isBuy = c['rec'] == "BUY"; 
+                      bool isWait = c['rec'] == "WAIT";
                       int dec = c['dec'] as int;
                       double currentPrice = c['cp'] as double;
                       String assetName = c['name'] as String;
                       String t1d = c['trend1d'] as String;
                       String t4h = c['trend4h'] as String;
                       String macd = c['macd'] as String;
+                      String vol = c['volTrend'] as String;
                       String rsi = c['rsi'].toString();
                       String bb = c['bbPct'].toString();
                       String entry = c['entry'].toString();
@@ -357,7 +395,10 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4))),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8), 
+                          side: BorderSide(color: isWait ? Colors.grey.withOpacity(0.3) : (isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4)))
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(14.0),
                           child: Column(
@@ -367,7 +408,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text(isBuy ? "BUY SIGNAL" : "SHORT SIGNAL", style: TextStyle(color: isBuy ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text(isWait ? "WAIT SIGNAL" : (isBuy ? "BUY SIGNAL" : "SHORT SIGNAL"), 
+                                       style: TextStyle(color: isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent), fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
                               const Divider(color: Colors.grey, thickness: 0.3, height: 16),
@@ -390,6 +432,12 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                     decoration: BoxDecoration(color: macd == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
                                     child: Text("MACD: " + macd, style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: vol == "HIGH" ? Colors.purple.withOpacity(0.15) : Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("VOL: " + vol, style: TextStyle(color: vol == "HIGH" ? Colors.purpleAccent : Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 10),
@@ -397,18 +445,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: " + entry, style: TextStyle(color: isWait ? Colors.grey : Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("SL: " + sl, style: TextStyle(color: isWait ? Colors.grey : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("TP: " + tp, style: TextStyle(color: isWait ? Colors.grey : Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity, padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: TextStyle(color: isWait ? Colors.grey : Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                               )
                             ],
                           ),
