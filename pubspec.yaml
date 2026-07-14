@@ -10,6 +10,8 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   flutter_launcher_icons: ^0.13.1
+  flutter_local_notifications: ^17.0.1
+  intl: ^0.19.0
 
 flutter:
   uses-material-design: true
@@ -17,9 +19,5 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/app_icon.png"
   min_sdk_android: 21
-
-  flutter_launcher_name: ^0.0.1
-  flutter_local_notifications: ^17.0.1   # NEW: Push Notifications
-  intl: ^0.19.0                          # NEW: Date Formatting for Earnings
