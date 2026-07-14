@@ -27,6 +27,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   Timer? _watchdogTimer;
   String _macroSentiment = "NEUTRAL";
   final List<Map<String, dynamic>> _calculatedCards = [];
+  List<String> _earningsRiskList = [];
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
   final Map<String, String> _masterWatchlist = {
@@ -67,11 +68,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       if (data['values'] == null) return null;
       List<dynamic> raw = (data['values'] as List).reversed.toList();
       List<double> closes = raw.map((e) => double.tryParse(e['close'].toString()) ?? 0.0).toList();
+      List<double> highs = raw.map((e) => double.tryParse(e['high'].toString()) ?? 0.0).toList();
+      List<double> lows = raw.map((e) => double.tryParse(e['low'].toString()) ?? 0.0).toList();
+      
       return {
         "name": name, "ticker": ticker, "cp": closes.last, "trend1d": "BULL", "trend4h": "BULL", 
         "volTrend": "HIGH", "rsi": 50.0, "bbPct": 50.0, "macdHist": 1.0, "atr": 0.5,
         "sparkline": closes.sublist(math.max(0, closes.length - 30)),
-        "resis": closes.last * 1.05, "supp": closes.last * 0.95
+        "resis": highs.reduce(math.max), "supp": lows.reduce(math.min)
       };
     } catch (_) { return null; }
   }
