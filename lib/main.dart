@@ -19,7 +19,6 @@ class QuantWorkstation extends StatefulWidget {
 }
 
 class _QuantWorkstationState extends State<QuantWorkstation> {
-  // ... [RETAIN ALL YOUR ORIGINAL STATE VARIABLES] ...
   final TextEditingController _balanceController = TextEditingController(text: "1000");
   final TextEditingController _customTickerController = TextEditingController();
   bool _isLoading = false;
@@ -31,13 +30,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
   final Map<String, String> _masterWatchlist = {
-    "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
-    "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL", 
-    "NETFLIX": "NFLX", "BERKSHIRE": "BRK/B", "GOLD": "XAU/USD", "SILVER": "XAG/USD", 
-    "PLATINUM": "XPT/USD", "CRUDE_OIL": "WTICO/USD", "EURUSD": "EUR/USD", 
-    "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD", 
-    "USDCAD": "USD/CAD", "USDCHF": "USD/CHF", "NZDUSD": "NZD/USD", 
-    "EURGBP": "EUR/GBP", "EURJPY": "EUR/JPY", "GBPJPY": "GBPJPY", 
+    "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD",
+    "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL",
+    "NETFLIX": "NFLX", "BERKSHIRE": "BRK/B", "GOLD": "XAU/USD", "SILVER": "XAG/USD",
+    "PLATINUM": "XPT/USD", "CRUDE_OIL": "WTICO/USD", "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD",
+    "USDCAD": "USD/CAD", "USDCHF": "USD/CHF", "NZDUSD": "NZD/USD",
+    "EURGBP": "EUR/GBP", "EURJPY": "EUR/JPY", "GBPJPY": "GBPJPY",
     "AUDJPY": "AUD/JPY", "GBPAUD": "GBP/AUD"
   };
 
@@ -68,34 +67,40 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       if (data['values'] == null) return null;
       List<dynamic> raw = (data['values'] as List).reversed.toList();
       List<double> closes = raw.map((e) => double.tryParse(e['close'].toString()) ?? 0.0).toList();
+      List<double> highs = raw.map((e) => double.tryParse(e['high'].toString()) ?? 0.0).toList();
+      List<double> lows = raw.map((e) => double.tryParse(e['low'].toString()) ?? 0.0).toList();
+      
       return {
         "name": name, "ticker": ticker, "cp": closes.last, "trend1d": "BULL", "trend4h": "BULL", 
         "volTrend": "HIGH", "rsi": 50.0, "bbPct": 50.0, "macdHist": 1.0, "atr": 0.5,
         "sparkline": closes.sublist(math.max(0, closes.length - 30)),
-        "resis": closes.last * 1.05, "supp": closes.last * 0.95
+        "resis": highs.reduce(math.max), "supp": lows.reduce(math.min)
       };
     } catch (_) { return null; }
-  }
-
-  void _compileRiskCard(Map<String, dynamic> m, double capital) {
-    double score = 2.5; 
-    String finalRec = "BUY (SCORE: ${score.toStringAsFixed(1)})";
-    _calculatedCards.add({
-      "name": m['name'], "rec": finalRec, "cp": m['cp'], "rsi": m['rsi'],
-      "bbPct": m['bbPct'], "trend1d": m['trend1d'], "trend4h": m['trend4h'],
-      "macd": "BULL", "volTrend": m['volTrend'], "sparkline": m['sparkline'],
-      "entry": m['cp'], "sl": m['cp'] * 0.98, "tp": m['cp'] * 1.02, "lots": "0.1", "dec": 2
-    });
   }
 
   void _executeConcurrentScan() async {
     setState(() { _isLoading = true; _calculatedCards.clear(); });
     for (var entry in _masterWatchlist.entries) {
       _processAssetMetrics(entry.key, entry.value).then((m) {
-        if (m != null && mounted) setState(() => _compileRiskCard(m, 1000.0));
+        if (m != null && mounted) setState(() => _compileRiskCard(m));
         if (_calculatedCards.length == _masterWatchlist.length) setState(() => _isLoading = false);
       });
     }
+  }
+
+  void _compileRiskCard(Map<String, dynamic> m) {
+    double score = 2.5; 
+    String baseRec = score >= 2.0 ? "BUY" : (score <= -2.0 ? "SHORT" : "WAIT");
+    String finalRec = "$baseRec (SCORE: ${score.toStringAsFixed(1)})";
+    
+    _calculatedCards.add({
+      "name": m['name'], "rec": finalRec, "baseRec": baseRec, "cp": m['cp'], "rsi": m['rsi'],
+      "bbPct": m['bbPct'], "trend1d": m['trend1d'], "trend4h": m['trend4h'],
+      "macd": "BULL", "volTrend": m['volTrend'], "sparkline": m['sparkline'],
+      "entry": m['cp'], "sl": m['cp'] * 0.98, "tp": m['cp'] * 1.02, 
+      "lots": "0.1", "dec": 2
+    });
   }
 
   @override
