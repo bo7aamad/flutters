@@ -24,7 +24,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   String _macroSentiment = "NEUTRAL";
   final List<Map<String, dynamic>> _calculatedCards = [];
 
-  // Twelve Data Standardized Watchlist
   final Map<String, String> _masterWatchlist = {
     "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
     "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL", 
@@ -40,7 +39,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
   };
 
-  // The Twelve Data API Key
   final String _apiKey = "a9eeefb4ba19452b91adb75330fb05ae";
 
   Future<String> _calculateMacroSentiment() async {
@@ -86,7 +84,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
-    // Official Twelve Data Endpoints
     final url4h = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=4h&outputsize=200&apikey=$_apiKey";
     final url1d = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=1day&outputsize=100&apikey=$_apiKey";
     
@@ -97,11 +94,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       final data4h = jsonDecode(res4h.body);
       final data1d = jsonDecode(res1d.body);
       
-      // Handle API errors or Rate Limits
       if (data4h['status'] == 'error' || data1d['status'] == 'error') return null;
       if (data4h['values'] == null || data1d['values'] == null) return null;
 
-      // Twelve Data returns newest first. Reverse to chronological order.
       List<dynamic> raw4h = (data4h['values'] as List).reversed.toList();
       List<dynamic> raw1d = (data1d['values'] as List).reversed.toList();
       
@@ -155,14 +150,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double resis = highs4h.isNotEmpty ? highs4h.sublist(math.max(0, highs4h.length - 20)).reduce(math.max) : cp;
       double supp = lows4h.isNotEmpty ? lows4h.sublist(math.max(0, lows4h.length - 20)).reduce(math.min) : cp;
 
-      // Patched Volume Extraction for Institutional Data
+      // PATCH 1: 5-Period Short-Term Volume Baseline
       double refVol = vols4h.length > 1 ? vols4h[vols4h.length - 2] : (vols4h.isNotEmpty ? vols4h.last : 0);
-      double smaVol20 = _calculateLastSMA(vols4h, 20);
+      double smaVol5 = _calculateLastSMA(vols4h, 5); 
       String volTrend = "LOW";
       
-      if (refVol == 0 || smaVol20 == 0) {
-        volTrend = "N/A"; // Bypass for pairs missing institutional liquidity data
-      } else if (refVol >= (smaVol20 * 0.75)) {
+      if (refVol == 0 || smaVol5 == 0) {
+        volTrend = "N/A"; 
+      } else if (refVol >= (smaVol5 * 0.60)) { // Requires 60% of recent short-term average
         volTrend = "HIGH";
       }
 
@@ -232,7 +227,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (customMetrics != null && mounted) {
       setState(() { _compileRiskCard(customMetrics, capital); _customTickerController.clear(); });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ticker Verification Failure: Check Twelve Data format (e.g. BTC/USD)")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ticker Verification Failure: Check Twelve Data format (e.g. BTC/USD)")));
     }
     setState(() { _isLoading = false; });
   }
@@ -246,19 +241,23 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     String vTrend = (m['volTrend'] ?? "LOW") as String;
 
     double score = 0;
-    if (_macroSentiment == "BUY") score += 1.0; if (_macroSentiment == "SHORT") score -= 1.0;
+    if (_macroSentiment == "BUY") score += 1.0; else if (_macroSentiment == "SHORT") score -= 1.0;
+    
     if (t4h == "BULL") score += 1.0; else score -= 1.0;
     if (t1d == "BULL") score += 1.5; else score -= 1.5;
     if (macdVal > 0) score += 0.5; else score -= 0.5;
-    if (rsiVal < 40) score += 1.0; if (rsiVal > 60) score -= 1.0;
     
-    if (bbVal > 80) score -= 1.0;
-    if (bbVal < 20) score += 1.0;
+    // Adjusted extreme zones for partial credit
+    if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
+    if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
     String finalRec = "WAIT";
-    if (score >= 2.5) finalRec = "BUY";
-    else if (score <= -2.5) finalRec = "SHORT";
+    
+    // PATCH 2: Relaxed Threshold - Requires 2.0 instead of 2.5
+    if (score >= 2.0) finalRec = "BUY";
+    else if (score <= -2.0) finalRec = "SHORT";
 
+    // Hard Filters
     if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
     if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
     if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
@@ -305,7 +304,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     _calculatedCards.add({
       "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
-      "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend
+      "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend,
+      "score": score // PATCH 3: Algorithm Score Exported to UI
     });
   }
 
@@ -357,7 +357,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                 ElevatedButton(
                   onPressed: _isLoading ? null : _injectAndScanCustomTicker,
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text("Scan Ticker", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  child: const Text("Scan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 )
               ],
             ),
@@ -395,6 +395,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       String sl = c['sl'].toString();
                       String tp = c['tp'].toString();
                       String positionSize = c['lots'] as String;
+                      
+                      // Format Score for UI
+                      String scoreStr = (c['score'] as double).toStringAsFixed(1);
 
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
@@ -411,7 +414,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text(isWait ? "WAIT SIGNAL" : (isBuy ? "BUY SIGNAL" : "SHORT SIGNAL"), 
+                                  Text(isWait ? "WAIT (Score: $scoreStr)" : (isBuy ? "BUY (Score: $scoreStr)" : "SHORT (Score: $scoreStr)"), 
                                        style: TextStyle(color: isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent), fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
