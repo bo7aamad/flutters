@@ -363,6 +363,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
         title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
         actions: [
+          // NEW: About Page Navigation Icon
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.grey),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AboutScreen()));
+            },
+            tooltip: "System Architecture",
+          ),
           IconButton(
             icon: Icon(_watchdogActive ? Icons.precision_manufacturing : Icons.precision_manufacturing_outlined, color: _watchdogActive ? Colors.greenAccent : Colors.grey),
             onPressed: _toggleWatchdog,
@@ -507,101 +515,4 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: vol == "HIGH" ? Colors.purple.withOpacity(0.15) : Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("VOL: " + vol, style: TextStyle(color: vol == "HIGH" ? Colors.purpleAccent : Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity, padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0, bottom: 2.0),
-              child: Text(
-                "Built by M.AlSalamah",
-                style: TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.2),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SparklinePainter extends CustomPainter {
-  final List<double> data;
-  final Color color;
-
-  SparklinePainter(this.data, this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
-
-    List<double> cleanData = [];
-    double lastValid = data.firstWhere((e) => e > 0, orElse: () => 1.0);
-    for (double d in data) {
-      if (d > 0) { cleanData.add(d); lastValid = d; }
-      else { cleanData.add(lastValid); }
-    }
-
-    final double min = cleanData.reduce(math.min);
-    final double max = cleanData.reduce(math.max);
-    final double range = (max - min) == 0 ? 1 : (max - min);
-    final double xStep = size.width / (cleanData.length - 1);
-
-    final Path linePath = Path();
-    for (int i = 0; i < cleanData.length; i++) {
-      final double x = i * xStep;
-      final double y = size.height - ((cleanData[i] - min) / range * size.height);
-      if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
-    }
-
-    final Path fillPath = Path.from(linePath);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final Paint fillPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..shader = ui.Gradient.linear(
-        const Offset(0, 0),
-        Offset(0, size.height),
-        [color.withOpacity(0.4), color.withOpacity(0.0)],
-      );
-      
-    final Paint linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(linePath, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
+                                    child: Text("VOL: " + vol, style: TextStyle(color:
