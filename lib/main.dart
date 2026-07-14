@@ -24,20 +24,24 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   String _macroSentiment = "NEUTRAL";
   final List<Map<String, dynamic>> _calculatedCards = [];
 
+  // Twelve Data Standardized Watchlist
   final Map<String, String> _masterWatchlist = {
     "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
     "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL", 
-    "NETFLIX": "NFLX", "BERKSHIRE": "BRK-B", "GOLD": "GC=F", "SILVER": "SI=F", 
-    "PLATINUM": "PL=F", "CRUDE_OIL": "CL=F", "EURUSD": "EURUSD=X", 
-    "GBPUSD": "GBPUSD=X", "USDJPY": "USDJPY=X", "AUDUSD": "AUDUSD=X", 
-    "USDCAD": "USDCAD=X", "USDCHF": "USDCHF=X", "NZDUSD": "NZDUSD=X", 
-    "EURGBP": "EURGBP=X", "EURJPY": "EURJPY=X", "GBPJPY": "GBPJPY=X", 
-    "AUDJPY": "AUDJPY=X", "GBPAUD": "GBPAUD=X"
+    "NETFLIX": "NFLX", "BERKSHIRE": "BRK/B", "GOLD": "XAU/USD", "SILVER": "XAG/USD", 
+    "PLATINUM": "XPT/USD", "CRUDE_OIL": "WTICO/USD", "EURUSD": "EUR/USD", 
+    "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD", 
+    "USDCAD": "USD/CAD", "USDCHF": "USD/CHF", "NZDUSD": "NZD/USD", 
+    "EURGBP": "EUR/GBP", "EURJPY": "EUR/JPY", "GBPJPY": "GBP/JPY", 
+    "AUDJPY": "AUD/JPY", "GBPAUD": "GBP/AUD"
   };
 
   final Map<String, String> _headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
   };
+
+  // The Twelve Data API Key
+  final String _apiKey = "a9eeefb4ba19452b91adb75330fb05ae";
 
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
@@ -76,25 +80,40 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return score > 0.03 ? "BUY" : (score < -0.03 ? "SHORT" : "NEUTRAL");
   }
 
+  double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    return double.tryParse(val.toString()) ?? 0.0;
+  }
+
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
-    final url4h = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=4h&range=30d";
-    final url1d = "https://query1.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=90d";
+    // Official Twelve Data Endpoints
+    final url4h = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=4h&outputsize=200&apikey=$_apiKey";
+    final url1d = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=1day&outputsize=100&apikey=$_apiKey";
     
     try {
-      final res4h = await http.get(Uri.parse(url4h), headers: _headers).timeout(const Duration(seconds: 4));
-      final res1d = await http.get(Uri.parse(url1d), headers: _headers).timeout(const Duration(seconds: 4));
+      final res4h = await http.get(Uri.parse(url4h)).timeout(const Duration(seconds: 5));
+      final res1d = await http.get(Uri.parse(url1d)).timeout(const Duration(seconds: 5));
       
-      if (res4h.statusCode != 200 || res1d.statusCode != 200) return null;
+      final data4h = jsonDecode(res4h.body);
+      final data1d = jsonDecode(res1d.body);
       
-      final data4h = jsonDecode(res4h.body)['chart']['result'][0];
-      final ind4h = data4h['indicators']['quote'][0];
-      List<double> closes4h = _extractCloses(ind4h);
+      // Handle API errors or Rate Limits
+      if (data4h['status'] == 'error' || data1d['status'] == 'error') return null;
+      if (data4h['values'] == null || data1d['values'] == null) return null;
+
+      // Twelve Data returns newest first. Reverse to chronological order.
+      List<dynamic> raw4h = (data4h['values'] as List).reversed.toList();
+      List<dynamic> raw1d = (data1d['values'] as List).reversed.toList();
       
-      final data1d = jsonDecode(res1d.body)['chart']['result'][0];
-      final ind1d = data1d['indicators']['quote'][0];
-      List<double> closes1d = _extractCloses(ind1d);
+      if (raw4h.length < 26 || raw1d.length < 26) return null;
+
+      List<double> closes4h = raw4h.map((e) => _parseDouble(e['close'])).toList();
+      List<double> highs4h = raw4h.map((e) => _parseDouble(e['high'])).toList();
+      List<double> lows4h = raw4h.map((e) => _parseDouble(e['low'])).toList();
+      List<double> vols4h = raw4h.map((e) => _parseDouble(e['volume'])).toList();
       
-      if (closes4h.length < 26 || closes1d.length < 26) return null;
+      List<double> closes1d = raw1d.map((e) => _parseDouble(e['close'])).toList();
+
       double cp = closes4h.last;
 
       double ema12 = _calculateLastEMA(closes4h, 12);
@@ -122,53 +141,36 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double lowerBB = sma20_4h - (std20 * 2);
       double bbPct = ((cp - lowerBB) / math.max(upperBB - lowerBB, 0.01)) * 100;
 
-      final indHighs = ind4h['high'] ?? [];
-      final indLows = ind4h['low'] ?? [];
       double trSum = 0; int count = 0;
       for (int i = closes4h.length - 14; i < closes4h.length; i++) {
-        if (i < indHighs.length && i < indLows.length && i > 0 && indHighs[i] != null && indLows[i] != null) {
-          double h = (indHighs[i] as num).toDouble();
-          double l = (indLows[i] as num).toDouble();
+        if (i > 0) {
+          double h = highs4h[i];
+          double l = lows4h[i];
           double tr = math.max(h - l, math.max((h - closes4h[i - 1]).abs(), (l - closes4h[i - 1]).abs()));
           trSum += tr; count++;
         }
       }
       double atr = count > 0 ? trSum / count : cp * 0.01;
 
-      List<double> rawHighs = ind4h['high'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
-      List<double> rawLows = ind4h['low'].where((x) => x != null).map<double>((x) => (x as num).toDouble()).toList();
-      double resis = rawHighs.isNotEmpty ? rawHighs.sublist(math.max(0, rawHighs.length - 20)).reduce(math.max) : cp;
-      double supp = rawLows.isNotEmpty ? rawLows.sublist(math.max(0, rawLows.length - 20)).reduce(math.min) : cp;
+      double resis = highs4h.isNotEmpty ? highs4h.sublist(math.max(0, highs4h.length - 20)).reduce(math.max) : cp;
+      double supp = lows4h.isNotEmpty ? lows4h.sublist(math.max(0, lows4h.length - 20)).reduce(math.min) : cp;
 
-      // Volume Extraction and Processing (PATCHED)
-      final indVol = ind4h['volume'] ?? [];
-      List<double> vols = [];
-      for (var v in indVol) { if (v != null) vols.add((v as num).toDouble()); }
-      
-      // Use the last COMPLETED candle, not the live forming one
-      double refVol = vols.length > 1 ? vols[vols.length - 2] : (vols.isNotEmpty ? vols.last : 0);
-      double smaVol20 = _calculateLastSMA(vols, 20);
-      
+      // Patched Volume Extraction for Institutional Data
+      double refVol = vols4h.length > 1 ? vols4h[vols4h.length - 2] : (vols4h.isNotEmpty ? vols4h.last : 0);
+      double smaVol20 = _calculateLastSMA(vols4h, 20);
       String volTrend = "LOW";
+      
       if (refVol == 0 || smaVol20 == 0) {
-        // Bypass filter for Forex/Commodities where YF returns 0 volume
-        volTrend = "N/A"; 
-      } else if (refVol >= (smaVol20 * 0.75)) { 
-        // 75% of average is considered healthy continuation volume
+        volTrend = "N/A"; // Bypass for pairs missing institutional liquidity data
+      } else if (refVol >= (smaVol20 * 0.75)) {
         volTrend = "HIGH";
       }
+
       return {
         "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
         "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend
       };
     } catch (_) { return null; }
-  }
-
-  List<double> _extractCloses(Map<String, dynamic> indicators) {
-    List<dynamic> rawCloses = indicators['close'] ?? [];
-    List<double> closes = [];
-    for (var c in rawCloses) { if (c != null) { closes.add((c as num).toDouble()); } }
-    return closes;
   }
 
   double _calculateLastSMA(List<double> data, int period) {
@@ -230,7 +232,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (customMetrics != null && mounted) {
       setState(() { _compileRiskCard(customMetrics, capital); _customTickerController.clear(); });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ticker Verification Failure: Symbol '$sym' unrecognized.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ticker Verification Failure: Check Twelve Data format (e.g. BTC/USD)")));
     }
     setState(() { _isLoading = false; });
   }
@@ -250,20 +252,15 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (macdVal > 0) score += 0.5; else score -= 0.5;
     if (rsiVal < 40) score += 1.0; if (rsiVal > 60) score -= 1.0;
     
-    // UPGRADE 2: Bollinger Penalty (Penalize buying the absolute top, shorting absolute bottom)
     if (bbVal > 80) score -= 1.0;
     if (bbVal < 20) score += 1.0;
 
-    // UPGRADE 1: WAIT / NEUTRAL Zone (Require strong confluence to issue signal)
     String finalRec = "WAIT";
     if (score >= 2.5) finalRec = "BUY";
     else if (score <= -2.5) finalRec = "SHORT";
 
-    // UPGRADE 3: Golden Confluence Hard-Filter (Never trade against 1D trend)
     if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
     if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
-
-    // UPGRADE 4: Volume Verification (Ignore breakouts on low volume)
     if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
 
     String name = m['name'] as String;
@@ -279,15 +276,12 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double tp = 0;
 
     if (finalRec == "BUY") {
-      // UPGRADE 2: Support-Based dynamic Stop Loss
       sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); 
-      tp = entry + ((entry - sl).abs() * 2.0); // Minimum 1:2 R:R Ratio
+      tp = entry + ((entry - sl).abs() * 2.0); 
     } else if (finalRec == "SHORT") {
-      // UPGRADE 2: Resistance-Based dynamic Stop Loss
       sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); 
       tp = entry - ((sl - entry).abs() * 2.0);
     } else {
-      // Background math placeholder for WAIT mode
       sl = entry - (atrVal * 2.0); 
       tp = entry + (atrVal * 2.0);
     }
@@ -354,7 +348,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                   child: TextField(
                     controller: _customTickerController, style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: "Inject asset token (e.g. AMD, META)", hintStyle: const TextStyle(color: Colors.grey),
+                      hintText: "Inject TD asset (e.g. BTC/USD)", hintStyle: const TextStyle(color: Colors.grey),
                       filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
