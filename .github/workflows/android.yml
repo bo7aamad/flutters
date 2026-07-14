@@ -21,7 +21,7 @@ jobs:
         channel: 'stable'
 
     - name: Generate Native Folders FIRST
-      run: flutter create .
+      run: flutter create --org com.malsalamah --project-name zeus_workstation .
 
     - name: Inject Dependencies and Generate Icons
       run: |
