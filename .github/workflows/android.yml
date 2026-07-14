@@ -32,12 +32,9 @@ jobs:
     - name: Generate Android Native Templates
       run: flutter create --org com.malsalamah --project-name quant_workstation .
 
-    # UPGRADE: Inject all required engine packages dynamically
     - name: Inject Package Dependencies
       run: |
         flutter pub add http:1.2.0
-        flutter pub add intl:^0.19.0
-        flutter pub add flutter_local_notifications:^17.0.1
 
     - name: Modernize Android Target and Compile SDK Versions
       run: |
