@@ -1,43 +1,34 @@
-// ... (Keep your imports and main() the same as your current file) ...
+name: Build Flutter Production APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-  void _executeConcurrentScan() async {
-    setState(() { _isLoading = true; _calculatedCards.clear(); });
-    await _fetchEarningsCalendar();
-    String sentiment = await _calculateMacroSentiment();
-    setState(() { _macroSentiment = sentiment; });
-    for (var entry in _masterWatchlist.entries) {
-      _processAssetMetrics(entry.key, entry.value).then((metrics) {
-        if (metrics != null && mounted) {
-          // This call now actually compiles the card
-          setState(() => _compileRiskCard(metrics, double.tryParse(_balanceController.text) ?? 1000.0));
-        }
-        if (_calculatedCards.length == _masterWatchlist.length) setState(() => _isLoading = false);
-      });
-    }
-  }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
+      with: 
+        distribution: 'temurin'
+        java-version: '17'
+    - uses: subosito/flutter-action@v2
+      with: 
+        flutter-version: '3.19.x'
+        channel: 'stable'
 
-  void _compileRiskCard(Map<String, dynamic> m, double capital) {
-    // RESTORED: Logic to calculate and add cards to the list
-    double cp = m['cp'] as double;
-    _calculatedCards.add({
-      "name": m['name'], "rec": "BUY", "cp": cp, "trend1d": m['trend1d'], 
-      "trend4h": m['trend4h'], "macd": "BULL", "volTrend": m['volTrend'],
-      "sparkline": m['sparkline'], "rsi": 50, "bbPct": 50, "entry": cp, "sl": cp*0.9, "tp": cp*1.1, "lots": "1.0", "dec": 2, "score": 2.0
-    });
-  }
+    - name: Clean and Generate
+      run: |
+        flutter pub get
+        flutter pub add http:1.2.0 intl:^0.19.0 flutter_local_notifications:^17.0.1 flutter_launcher_icons:^0.13.1
+        flutter pub run flutter_launcher_icons
+        flutter create .
+        
+    - name: Compile
+      run: flutter build apk --debug
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121216),
-      appBar: AppBar(title: const Text("ZEUS WORKSTATION")),
-      // RESTORED: This ListView renders your cards
-      body: ListView.builder(
-        itemCount: _calculatedCards.length,
-        itemBuilder: (context, idx) {
-          final c = _calculatedCards[idx];
-          return Card(child: Text(c['name'])); // Add your previous card design here
-        }
-      ),
-    );
-  }
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Zeus-Workstation-APK
+        path: build/app/outputs/flutter-apk/app-debug.apk
