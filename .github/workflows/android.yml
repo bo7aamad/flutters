@@ -9,21 +9,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    
     - uses: actions/setup-java@v4
       with: 
         distribution: 'temurin'
         java-version: '17'
+        
     - uses: subosito/flutter-action@v2
       with: 
         flutter-version: '3.19.x'
         channel: 'stable'
 
-    - name: Clean and Generate
+    - name: Generate Native Folders FIRST
+      run: flutter create .
+
+    - name: Inject Dependencies and Generate Icons
       run: |
         flutter pub get
         flutter pub add http:1.2.0 intl:^0.19.0 flutter_local_notifications:^17.0.1 flutter_launcher_icons:^0.13.1
         flutter pub run flutter_launcher_icons
-        flutter create .
+        
+    - name: Modernize Android Target SDK
+      run: |
+        python3 -c "
+        import os
+        path = 'android/app/build.gradle'
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                content = f.read()
+            content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
+            content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 34')
+            with open(path, 'w') as f:
+                f.write(content)
+        "
         
     - name: Compile
       run: flutter build apk --debug
