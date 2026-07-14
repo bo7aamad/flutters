@@ -302,21 +302,22 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
-    String finalRec = "WAIT (SCORE: ${score.toStringAsFixed(1)})";
-    // RESTORED: Strict Quantitative Math Threshold (+/- 2.0)
-    if (score >= 2.0) finalRec = "BUY";
-    else if (score <= -2.0) finalRec = "SHORT";
+    String baseRec = "WAIT";
+    if (score >= 2.0) baseRec = "BUY";
+    else if (score <= -2.0) baseRec = "SHORT";
 
-    // X-RAY TRANSPARENCY
-    if (finalRec == "BUY" && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
-    if (finalRec == "SHORT" && t1d == "BULL") finalRec = "WAIT (1D-BULL)";
-    if (vTrend == "LOW" && (finalRec == "BUY" || finalRec == "SHORT")) finalRec = "WAIT (LOW VOL)";
+    if (baseRec == "BUY" && t1d == "BEAR") baseRec = "WAIT (1D-BEAR)";
+    if (baseRec == "SHORT" && t1d == "BULL") baseRec = "WAIT (1D-BULL)";
+    if (vTrend == "LOW" && (baseRec == "BUY" || baseRec == "SHORT")) baseRec = "WAIT (LOW VOL)";
     
     bool hasEarnings = _earningsRiskList.contains(ticker.split("/")[0]);
-    if (hasEarnings) { finalRec = "WAIT (EARNINGS)"; }
+    if (hasEarnings) { baseRec = "WAIT (EARNINGS)"; }
 
-    if ((finalRec == "BUY" || finalRec == "SHORT") && _watchdogActive) {
-      _sendPushAlert("QUANT SIGNAL: $finalRec", "${m['name']} Confluence Score: ${score.toStringAsFixed(1)}");
+    // Enforces strict formatting so the Score is always displayed globally
+    String finalRec = "$baseRec (SCORE: ${score.toStringAsFixed(1)})";
+
+    if ((baseRec == "BUY" || baseRec == "SHORT") && _watchdogActive) {
+      _sendPushAlert("QUANT SIGNAL: $baseRec", "${m['name']} Triggered Confluence");
     }
 
     String name = m['name'] as String;
@@ -330,9 +331,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double sl = 0; 
     double tp = 0;
 
-    if (finalRec == "BUY") {
+    if (baseRec == "BUY") {
       sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); tp = entry + ((entry - sl).abs() * 2.0); 
-    } else if (finalRec == "SHORT") {
+    } else if (baseRec == "SHORT") {
       sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); tp = entry - ((sl - entry).abs() * 2.0);
     } else {
       sl = entry - (atrVal * 2.0); tp = entry + (atrVal * 2.0);
@@ -342,44 +343,77 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
     String lotRec = "";
     
-    if (finalRec.contains("WAIT")) { lotRec = "STANDBY - NO ENTRY"; } 
+    if (baseRec.contains("WAIT")) { lotRec = "STANDBY - NO ENTRY"; } 
     else if (isFx) { lotRec = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots"; } 
     else if (name == "GOLD") { lotRec = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)"; } 
     else if (name == "CRUDE_OIL") { lotRec = "${roundDouble(rawUnits / 1000.0, 2)} Contracts (Bbl)"; } 
     else { lotRec = "${rawUnits.round()} Shares / Lots"; }
 
     _calculatedCards.add({
-      "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
+      "name": name, "rec": finalRec, "baseRec": baseRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRec, "dec": dec,
       "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend,
-      "score": score, "sparkline": m['sparkline']
+      "sparkline": m['sparkline']
     });
   }
 
-  // RESTORED: The "About" Dialog configured with your specific background details
   void _showAboutDialog(BuildContext context) {
+    Widget buildBullet(String title, String body) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(text: "• $title ", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+              TextSpan(text: body, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+            ],
+          ),
+        ),
+      );
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A22),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text("ABOUT ZEUS WORKSTATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        content: const SingleChildScrollView(
-          child: Text(
-            "Zeus Workstation wasn’t born on a trading floor, but in the demanding world of gas turbine engineering. In industrial engineering, precision is absolute and there is zero tolerance for emotional decision-making. I realized the financial markets operate on the exact same principles of momentum, pressure, and structural integrity. I built Zeus Workstation to eliminate the noise and guesswork of retail trading, translating rigorous, data-driven telemetry into a centralized quantitative command system. We trade without emotion, executing only when the math aligns.\n\n"
-            "OUR QUANTITATIVE METHODOLOGY:\n\n"
-            "• Algorithmic Macro-Sentiment: We scrape live institutional feeds to calculate a real-time economic bias, ensuring we never trade against macroeconomic headwinds.\n\n"
-            "• Multi-Timeframe Confluence: We cross-reference daily and 4-hour structural trends, executing only when both timeframes lock into a \"Golden Confluence.\"\n\n"
-            "• Volatility-Adjusted Sizing: Using the Average True Range (ATR), the engine dynamically calculates precise stop-losses and position sizes to automatically protect capital during high volatility.\n\n"
-            "• Institutional Volume Verification: We pull real tick data to verify that every breakout is backed by actual market volume, filtering out fake signals and traps.\n\n"
-            "• Dynamic Structural Banding: We combine Bollinger Band positioning with automated support and resistance calculations to pinpoint our exact entry and exit coordinates.",
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white12)),
+        titlePadding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        title: const Row(
+          children: [
+            Icon(Icons.engineering, color: Colors.blueGrey, size: 20),
+            SizedBox(width: 8),
+            Text("ABOUT ZEUS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+          ]
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Zeus's Workstation wasn’t born on a trading floor, but in the demanding world of gas turbine engineering. In industrial engineering, precision is absolute and there is zero tolerance for emotional decision-making. I realized the financial markets operate on the exact same principles of momentum, pressure, and structural integrity. I built this to eliminate the noise and guesswork of retail trading, translating rigorous telemetry into a quantitative command system. We trade without emotion, executing only when the math aligns.",
+                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                const Text("QUANTITATIVE METHODOLOGY", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                const Divider(color: Colors.white24),
+                const SizedBox(height: 8),
+                buildBullet("Macro-Sentiment:", "Scrapes live institutional feeds for real-time economic bias."),
+                buildBullet("Golden Confluence:", "Cross-references daily and 4-hour structural trends."),
+                buildBullet("Volatility-Adjusted Sizing:", "Uses ATR to calculate exact stop-losses and precise lot sizes."),
+                buildBullet("Volume Verification:", "Pulls real tick data to verify breakouts are backed by market volume."),
+                buildBullet("Dynamic Banding:", "Combines Bollinger Bands with automated support and resistance."),
+              ],
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("CLOSE", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+            child: const Text("CLOSE", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13))
           )
         ],
       )
@@ -391,254 +425,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        title: const Text("ZEUS WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+        title: const Text("ZEUS'S WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
         actions: [
-          // RESTORED: The Missing About Page Icon
           IconButton(
             icon: const Icon(Icons.info_outline, color: Colors.grey),
-            onPressed: () => _showAboutDialog(context),
-            tooltip: "About Quantitative Methodology",
-          ),
-          IconButton(
-            icon: Icon(_watchdogActive ? Icons.precision_manufacturing : Icons.precision_manufacturing_outlined, color: _watchdogActive ? Colors.greenAccent : Colors.grey),
-            onPressed: _toggleWatchdog,
-            tooltip: "Toggle Auto-Pilot Watchdog",
-          )
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _balanceController, keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: "Vault Capital Floor (\$)", labelStyle: const TextStyle(color: Colors.grey),
-                      filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(color: const Color(0xFF1A1A22), borderRadius: BorderRadius.circular(8)),
-                  child: Text("MACRO: $_macroSentiment", style: TextStyle(color: _macroSentiment == "BUY" ? Colors.green : (_macroSentiment == "SHORT" ? Colors.red : Colors.amber), fontWeight: FontWeight.bold)),
-                )
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customTickerController, style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: "Inject TD asset (e.g. BTC/USD)", hintStyle: const TextStyle(color: Colors.grey),
-                      filled: true, fillColor: const Color(0xFF1A1A22), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _injectAndScanCustomTicker,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text("Scan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                )
-              ],
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _executeConcurrentScan,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A53), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("LAUNCH STREAMING QUANT CONFLUENCE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-              ),
-            ),
-            const SizedBox(height: 15),
-            Expanded(
-              child: _calculatedCards.isEmpty 
-                ? const Center(child: Text("Terminals Idle. Awaiting streaming vectors...", style: TextStyle(color: Colors.grey, fontSize: 14)))
-                : ListView.builder(
-                    itemCount: _calculatedCards.length,
-                    itemBuilder: (context, idx) {
-                      final c = _calculatedCards[idx];
-                      String finalRec = c['rec'] as String;
-                      bool isBuy = finalRec == "BUY"; 
-                      bool isShort = finalRec == "SHORT";
-                      bool isEarnings = finalRec.contains("EARNINGS");
-                      int dec = c['dec'] as int;
-                      double currentPrice = c['cp'] as double;
-                      String assetName = c['name'] as String;
-                      String t1d = c['trend1d'] as String;
-                      String t4h = c['trend4h'] as String;
-                      String macd = c['macd'] as String;
-                      String vol = c['volTrend'] as String;
-                      String rsi = c['rsi'].toString();
-                      String bb = c['bbPct'].toString();
-                      String entry = c['entry'].toString();
-                      String sl = c['sl'].toString();
-                      String tp = c['tp'].toString();
-                      String positionSize = c['lots'] as String;
-                      List<double> sparklineData = c['sparkline'] as List<double>;
-
-                      Color sigColor = Colors.blueGrey[300]!; 
-                      if (isBuy) sigColor = Colors.greenAccent;
-                      else if (isShort) sigColor = Colors.redAccent;
-                      else if (isEarnings) sigColor = Colors.amber;
-
-                      return Card(
-                        color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8), 
-                          side: BorderSide(color: sigColor.withOpacity(0.4))
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const Spacer(),
-                                  SizedBox(
-                                    width: 80, height: 30,
-                                    child: CustomPaint(
-                                      size: const Size(80, 30),
-                                      painter: SparklinePainter(sparklineData, sigColor)
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Text(finalRec, style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
-                              ),
-                              const Divider(color: Colors.grey, thickness: 0.3, height: 16),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: t1d == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("1D: " + t1d, style: TextStyle(color: t1d == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: t4h == "BULL" ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("4H: " + t4h, style: TextStyle(color: t4h == "BULL" ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: macd == "BULL" ? Colors.blue.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("MACD: " + macd, style: TextStyle(color: macd == "BULL" ? Colors.blueAccent : Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: vol == "HIGH" ? Colors.purple.withOpacity(0.15) : Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("VOL: " + vol, style: TextStyle(color: vol == "HIGH" ? Colors.purpleAccent : Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity, padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0, bottom: 2.0),
-              child: Text(
-                "Built by M.AlSalamah",
-                style: TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.2),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SparklinePainter extends CustomPainter {
-  final List<double> data;
-  final Color color;
-
-  SparklinePainter(this.data, this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
-
-    List<double> cleanData = [];
-    double lastValid = data.firstWhere((e) => e > 0, orElse: () => 1.0);
-    for (double d in data) {
-      if (d > 0) { cleanData.add(d); lastValid = d; }
-      else { cleanData.add(lastValid); }
-    }
-
-    final double min = cleanData.reduce(math.min);
-    final double max = cleanData.reduce(math.max);
-    final double range = (max - min) == 0 ? 1 : (max - min);
-    final double xStep = size.width / (cleanData.length - 1);
-
-    final Path linePath = Path();
-    for (int i = 0; i < cleanData.length; i++) {
-      final double x = i * xStep;
-      final double y = size.height - ((cleanData[i] - min) / range * size.height);
-      if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
-    }
-
-    final Path fillPath = Path.from(linePath);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final Paint fillPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..shader = ui.Gradient.linear(
-        const Offset(0, 0),
-        Offset(0, size.height),
-        [color.withOpacity(0.4), color.withOpacity(0.0)],
-      );
-      
-    final Paint linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(linePath, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
