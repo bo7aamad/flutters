@@ -32,12 +32,24 @@ jobs:
     - name: Generate Android Native Templates
       run: flutter create --org com.malsalamah --project-name quant_workstation .
 
-    # THE UPGRADE: Injecting all 3 required packages securely
+    # UPGRADE: Inject Dependencies AND Branding Tools
     - name: Inject Package Dependencies
       run: |
         flutter pub add http:1.2.0
         flutter pub add intl:^0.19.0
         flutter pub add flutter_local_notifications:^17.0.1
+        flutter pub add flutter_launcher_icons:^0.13.1
+
+    # UPGRADE: Rebrand App Name (Search/Replace the Manifest)
+    - name: Set App Name
+      run: |
+        sed -i 's/android:label=".*"/android:label="ZEUS V3"/' android/app/src/main/AndroidManifest.xml
+        sed -i 's/android:label=".*"/android:label="ZEUS V3"/' android/app/src/main/AndroidManifest.xml
+
+    # UPGRADE: Generate Icons
+    - name: Generate App Icon
+      run: |
+        flutter pub run flutter_launcher_icons
 
     - name: Modernize Android Target and Compile SDK Versions
       run: |
@@ -67,5 +79,5 @@ jobs:
     - name: Upload Standalone Mobile Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Production-Flutter-Package-Build-${{ github.run_number }}-${{ github.run_attempt }}
+        name: ZEUS_V3_Production_Build
         path: build/app/outputs/flutter-apk/app-debug.apk
