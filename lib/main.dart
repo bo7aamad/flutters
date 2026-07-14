@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui; // Required for the graph gradient
 
 void main() {
   runApp(const MaterialApp(
@@ -150,20 +151,23 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double resis = highs4h.isNotEmpty ? highs4h.sublist(math.max(0, highs4h.length - 20)).reduce(math.max) : cp;
       double supp = lows4h.isNotEmpty ? lows4h.sublist(math.max(0, lows4h.length - 20)).reduce(math.min) : cp;
 
-      // PATCH 1: 5-Period Short-Term Volume Baseline
       double refVol = vols4h.length > 1 ? vols4h[vols4h.length - 2] : (vols4h.isNotEmpty ? vols4h.last : 0);
       double smaVol5 = _calculateLastSMA(vols4h, 5); 
       String volTrend = "LOW";
       
       if (refVol == 0 || smaVol5 == 0) {
         volTrend = "N/A"; 
-      } else if (refVol >= (smaVol5 * 0.60)) { // Requires 60% of recent short-term average
+      } else if (refVol >= (smaVol5 * 0.60)) { 
         volTrend = "HIGH";
       }
 
+      // GRAPH DATA: Extract the last 30 periods for the sparkline
+      List<double> sparklineData = closes4h.length >= 30 ? closes4h.sublist(closes4h.length - 30) : closes4h;
+
       return {
         "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
-        "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend
+        "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend,
+        "sparkline": sparklineData // Exporting graph coordinates
       };
     } catch (_) { return null; }
   }
@@ -247,17 +251,14 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (t1d == "BULL") score += 1.5; else score -= 1.5;
     if (macdVal > 0) score += 0.5; else score -= 0.5;
     
-    // Adjusted extreme zones for partial credit
     if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
     String finalRec = "WAIT";
     
-    // PATCH 2: Relaxed Threshold - Requires 2.0 instead of 2.5
     if (score >= 2.0) finalRec = "BUY";
     else if (score <= -2.0) finalRec = "SHORT";
 
-    // Hard Filters
     if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
     if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
     if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
@@ -305,7 +306,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
       "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
       "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend,
-      "score": score // PATCH 3: Algorithm Score Exported to UI
+      "score": score,
+      "sparkline": m['sparkline'] // Pass graph data
     });
   }
 
@@ -395,9 +397,11 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       String sl = c['sl'].toString();
                       String tp = c['tp'].toString();
                       String positionSize = c['lots'] as String;
-                      
-                      // Format Score for UI
                       String scoreStr = (c['score'] as double).toStringAsFixed(1);
+                      List<double> sparklineData = c['sparkline'] as List<double>;
+
+                      // Determine Graph Color based on Signal
+                      Color sigColor = isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent);
 
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
@@ -411,11 +415,17 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(assetName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text(isWait ? "WAIT (Score: $scoreStr)" : (isBuy ? "BUY (Score: $scoreStr)" : "SHORT (Score: $scoreStr)"), 
-                                       style: TextStyle(color: isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent), fontWeight: FontWeight.bold, fontSize: 14)),
+                                  const Spacer(),
+                                  // NEW FEATURE: NATIVE SPARKLINE GRAPH
+                                  SizedBox(
+                                    width: 80, height: 25,
+                                    child: CustomPaint(painter: SparklinePainter(sparklineData, sigColor)),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Text(isWait ? "WAIT ($scoreStr)" : (isBuy ? "BUY ($scoreStr)" : "SHORT ($scoreStr)"), 
+                                       style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 14)),
                                 ],
                               ),
                               const Divider(color: Colors.grey, thickness: 0.3, height: 16),
@@ -483,4 +493,55 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       ),
     );
   }
+}
+
+// THE QUANTITATIVE SPARKLINE GENERATOR 
+class SparklinePainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+
+  SparklinePainter(this.data, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+
+    final double min = data.reduce(math.min);
+    final double max = data.reduce(math.max);
+    final double range = (max - min) == 0 ? 1 : (max - min);
+    final double xStep = size.width / (data.length - 1);
+
+    final Path linePath = Path();
+    for (int i = 0; i < data.length; i++) {
+      final double x = i * xStep;
+      final double y = size.height - ((data[i] - min) / range * size.height);
+      if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
+    }
+
+    // Creates the glowing gradient fill beneath the graph
+    final Path fillPath = Path.from(linePath);
+    fillPath.lineTo(size.width, size.height);
+    fillPath.lineTo(0, size.height);
+    fillPath.close();
+
+    final Paint fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..shader = ui.Gradient.linear(
+        const Offset(0, 0),
+        Offset(0, size.height),
+        [color.withOpacity(0.4), color.withOpacity(0.0)],
+      );
+      
+    final Paint linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(linePath, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
