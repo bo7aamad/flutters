@@ -24,7 +24,9 @@ jobs:
         channel: 'stable'
 
     - name: Backup Custom Quantitative Code
-      run: cp lib/main.dart main.dart.bak
+      run: |
+        cp lib/main.dart main.dart.bak
+        cp flutter_launcher_icons.yaml flutter_launcher_icons.yaml.bak
 
     - name: Clear Old Config Baselines
       run: rm -rf pubspec.yaml android ios web windows macos linux
@@ -32,7 +34,11 @@ jobs:
     - name: Generate Android Native Templates
       run: flutter create --org com.malsalamah --project-name quant_workstation .
 
-    # UPGRADE: Inject Dependencies AND Branding Tools
+    - name: Restore Configs
+      run: |
+        cp main.dart.bak lib/main.dart
+        cp flutter_launcher_icons.yaml.bak flutter_launcher_icons.yaml
+
     - name: Inject Package Dependencies
       run: |
         flutter pub add http:1.2.0
@@ -40,16 +46,14 @@ jobs:
         flutter pub add flutter_local_notifications:^17.0.1
         flutter pub add flutter_launcher_icons:^0.13.1
 
-    # UPGRADE: Rebrand App Name (Search/Replace the Manifest)
     - name: Set App Name
       run: |
-        sed -i 's/android:label=".*"/android:label="ZEUS V3"/' android/app/src/main/AndroidManifest.xml
-        sed -i 's/android:label=".*"/android:label="ZEUS V3"/' android/app/src/main/AndroidManifest.xml
+        sed -i 's/android:label=".*"/android:label="ZEUS V5"/' android/app/src/main/AndroidManifest.xml
 
-    # UPGRADE: Generate Icons
+    # UPGRADE: Explicitly point to the config file
     - name: Generate App Icon
       run: |
-        flutter pub run flutter_launcher_icons
+        flutter pub run flutter_launcher_icons -f flutter_launcher_icons.yaml
 
     - name: Modernize Android Target and Compile SDK Versions
       run: |
@@ -65,11 +69,6 @@ jobs:
                 f.write(content)
         "
 
-    - name: Restore Custom Quantitative Code
-      run: |
-        mkdir -p lib
-        cp main.dart.bak lib/main.dart
-
     - name: Clean Build Cache Environment
       run: flutter clean
 
@@ -79,5 +78,5 @@ jobs:
     - name: Upload Standalone Mobile Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ZEUS_V3_Production_Build
+        name: ZEUS_V5_Production_Build
         path: build/app/outputs/flutter-apk/app-debug.apk
