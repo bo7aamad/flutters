@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui; 
+import 'dart:ui' as ui;
+import 'dart:async'; 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; 
+import 'package:intl/intl.dart'; 
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
     home: QuantWorkstation(),
@@ -22,8 +26,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   final TextEditingController _customTickerController = TextEditingController();
   
   bool _isLoading = false;
+  bool _watchdogActive = false;
+  Timer? _watchdogTimer;
   String _macroSentiment = "NEUTRAL";
   final List<Map<String, dynamic>> _calculatedCards = [];
+  List<String> _earningsRiskList = []; 
+
+  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
   final Map<String, String> _masterWatchlist = {
     "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
@@ -36,23 +45,72 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     "AUDJPY": "AUD/JPY", "GBPAUD": "GBP/AUD"
   };
 
-  final Map<String, String> _headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-  };
+  final Map<String, String> _headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"};
 
   final String _tdApiKey = "a9eeefb4ba19452b91adb75330fb05ae";
+  final String _fmpApiKey = "pBDGnhUIlqmO80RrVIAa9YSROILUApn"; 
+
+  @override
+  void initState() {
+    super.initState();
+    _initNotifications();
+  }
+
+  void _initNotifications() async {
+    const AndroidInitializationSettings initAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings initIOS = DarwinInitializationSettings();
+    const InitializationSettings initSettings = InitializationSettings(android: initAndroid, iOS: initIOS);
+    await _notifications.initialize(initSettings);
+  }
+
+  Future<void> _sendPushAlert(String title, String body) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'zeus_channel', 'Zeus Alerts',
+      importance: Importance.max, priority: Priority.high, color: Color(0xFF007A53));
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+    await _notifications.show(DateTime.now().millisecond, title, body, platformDetails);
+  }
+
+  void _toggleWatchdog() {
+    setState(() {
+      _watchdogActive = !_watchdogActive;
+      if (_watchdogActive) {
+        _executeConcurrentScan(); 
+        _watchdogTimer = Timer.periodic(const Duration(minutes: 60), (timer) {
+          _executeConcurrentScan();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Watchdog Engaged: Auto-Scanning every 60 mins.", style: TextStyle(color: Colors.greenAccent)), backgroundColor: Color(0xFF1A1A22)));
+      } else {
+        _watchdogTimer?.cancel();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Watchdog Disengaged. Manual mode active.", style: TextStyle(color: Colors.redAccent)), backgroundColor: Color(0xFF1A1A22)));
+      }
+    });
+  }
+
+  Future<void> _fetchEarningsCalendar() async {
+    if (_fmpApiKey.isEmpty) return; 
+    try {
+      String from = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      String to = DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 5)));
+      String url = "https://financialmodelingprep.com/api/v3/earning_calendar?from=$from&to=$to&apikey=$_fmpApiKey";
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        List<dynamic> data = jsonDecode(res.body);
+        _earningsRiskList = data.map((e) => e['symbol'].toString()).toList();
+      }
+    } catch (_) {}
+  }
 
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
     final List<String> feeds = [
-      "https://finance.yahoo.com/rss/topstories",
+      "https://finance.yahoo.com/rss/topstories", 
       "https://rss.marketwatch.com/rss/topstories",
       "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=macroeconomics",
       "https://www.investing.com/rss/news_285.rss", 
       "https://www.investing.com/rss/news_95.rss",  
       "https://rsshub.app/twitter/user/Fxhedgsteam", 
     ];
-    
     final RegExp titleRegex = RegExp(r'<title>(.*?)</title>', caseSensitive: false);
     final List<String> bearWords = ["inflation", "rate hike", "hawkish", "slowdown", "recession", "drop", "bearish", "crash", "contraction"];
     final List<String> bullWords = ["rate cut", "dovish", "gdp growth", "demand spike", "rally", "surge", "bullish", "expansion"];
@@ -91,7 +149,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     try {
       final res4h = await http.get(Uri.parse(url4h)).timeout(const Duration(seconds: 5));
       final res1d = await http.get(Uri.parse(url1d)).timeout(const Duration(seconds: 5));
-      
       final data4h = jsonDecode(res4h.body);
       final data1d = jsonDecode(res1d.body);
       
@@ -100,7 +157,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
       List<dynamic> raw4h = (data4h['values'] as List).reversed.toList();
       List<dynamic> raw1d = (data1d['values'] as List).reversed.toList();
-      
       if (raw4h.length < 26 || raw1d.length < 26) return null;
 
       List<double> closes4h = raw4h.map((e) => _parseDouble(e['close'])).toList();
@@ -153,17 +209,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double refVol = vols4h.length > 1 ? vols4h[vols4h.length - 2] : (vols4h.isNotEmpty ? vols4h.last : 0);
       double smaVol5 = _calculateLastSMA(vols4h, 5); 
       String volTrend = "LOW";
-      
-      if (refVol == 0 || smaVol5 == 0) {
-        volTrend = "N/A"; 
-      } else if (refVol >= (smaVol5 * 0.60)) { 
-        volTrend = "HIGH";
-      }
+      if (refVol == 0 || smaVol5 == 0) { volTrend = "N/A"; } 
+      else if (refVol >= (smaVol5 * 0.60)) { volTrend = "HIGH"; }
 
       List<double> sparklineData = closes4h.length >= 30 ? closes4h.sublist(closes4h.length - 30) : closes4h;
 
       return {
-        "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
+        "name": name, "ticker": ticker, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
         "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend,
         "sparkline": sparklineData 
       };
@@ -201,11 +253,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   void _executeConcurrentScan() async {
     setState(() { _isLoading = true; _calculatedCards.clear(); });
     
+    await _fetchEarningsCalendar();
     String sentiment = await _calculateMacroSentiment();
     setState(() { _macroSentiment = sentiment; });
+    
     double capital = double.tryParse(_balanceController.text) ?? 1000.0;
-
     int completedCount = 0;
+    
     for (var entry in _masterWatchlist.entries) {
       _processAssetMetrics(entry.key, entry.value).then((metrics) {
         if (metrics != null && mounted) {
@@ -224,17 +278,15 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (sym.isEmpty) return;
     setState(() { _isLoading = true; });
     double capital = double.tryParse(_balanceController.text) ?? 1000.0;
-    
     var customMetrics = await _processAssetMetrics(sym, sym);
     if (customMetrics != null && mounted) {
       setState(() { _compileRiskCard(customMetrics, capital); _customTickerController.clear(); });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ticker Verification Failure: Check Twelve Data format (e.g. BTC/USD)")));
     }
     setState(() { _isLoading = false; });
   }
 
   void _compileRiskCard(Map<String, dynamic> m, double capital) {
+    String ticker = m['ticker'] as String;
     double rsiVal = (m['rsi'] as num).toDouble();
     double bbVal = (m['bbPct'] as num).toDouble();
     double macdVal = (m['macdHist'] as num).toDouble();
@@ -244,26 +296,31 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
     double score = 0;
     if (_macroSentiment == "BUY") score += 1.0; else if (_macroSentiment == "SHORT") score -= 1.0;
-    
     if (t4h == "BULL") score += 1.0; else score -= 1.0;
     if (t1d == "BULL") score += 1.5; else score -= 1.5;
     if (macdVal > 0) score += 0.5; else score -= 0.5;
-    
     if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
-    String finalRec = "WAIT";
-    if (score >= 2.0) finalRec = "BUY";
-    else if (score <= -2.0) finalRec = "SHORT";
+    String finalRec = "WAIT (SCORE: ${score.toStringAsFixed(1)})";
+    if (score >= 1.5) finalRec = "BUY";
+    else if (score <= -1.5) finalRec = "SHORT";
 
-    if (t1d == "BEAR" && finalRec == "BUY") finalRec = "WAIT";
-    if (t1d == "BULL" && finalRec == "SHORT") finalRec = "WAIT";
-    if (vTrend == "LOW" && finalRec != "WAIT") finalRec = "WAIT";
+    // X-RAY TRANSPARENCY
+    if (finalRec == "BUY" && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
+    if (finalRec == "SHORT" && t1d == "BULL") finalRec = "WAIT (1D-BULL)";
+    if (vTrend == "LOW" && (finalRec == "BUY" || finalRec == "SHORT")) finalRec = "WAIT (LOW VOL)";
+    
+    bool hasEarnings = _earningsRiskList.contains(ticker.split("/")[0]);
+    if (hasEarnings) { finalRec = "WAIT (EARNINGS)"; }
+
+    if ((finalRec == "BUY" || finalRec == "SHORT") && _watchdogActive) {
+      _sendPushAlert("QUANT SIGNAL: $finalRec", "${m['name']} Confluence Score: ${score.toStringAsFixed(1)}");
+    }
 
     String name = m['name'] as String;
     bool isFx = name.contains("USD") || name.contains("EUR") || name.contains("GBP") || name.contains("AUD") || name.contains("CAD") || name.contains("CHF") || name.contains("NZD");
     int dec = (isFx && !name.contains("JPY")) ? 4 : 2;
-
     double riskCapital = capital * 0.02;
     double atrVal = (m['atr'] as num).toDouble();
     double entry = (m['cp'] as num).toDouble(); 
@@ -273,38 +330,28 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double tp = 0;
 
     if (finalRec == "BUY") {
-      sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); 
-      tp = entry + ((entry - sl).abs() * 2.0); 
+      sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); tp = entry + ((entry - sl).abs() * 2.0); 
     } else if (finalRec == "SHORT") {
-      sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); 
-      tp = entry - ((sl - entry).abs() * 2.0);
+      sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); tp = entry - ((sl - entry).abs() * 2.0);
     } else {
-      sl = entry - (atrVal * 2.0); 
-      tp = entry + (atrVal * 2.0);
+      sl = entry - (atrVal * 2.0); tp = entry + (atrVal * 2.0);
     }
 
     entry = roundDouble(entry, dec); sl = roundDouble(sl, dec); tp = roundDouble(tp, dec);
     double rawUnits = riskCapital / math.max((entry - sl).abs(), 0.00001);
-    String lotRecommendation = "";
+    String lotRec = "";
     
-    if (finalRec == "WAIT") {
-      lotRecommendation = "STANDBY - NO ENTRY";
-    } else if (isFx) {
-      lotRecommendation = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots";
-    } else if (name == "GOLD") {
-      lotRecommendation = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)";
-    } else if (name == "CRUDE_OIL") {
-      lotRecommendation = "${roundDouble(rawUnits / 1000.0, 2)} Contracts (Bbl)";
-    } else {
-      lotRecommendation = "${rawUnits.round()} Shares / Lots";
-    }
+    if (finalRec.contains("WAIT")) { lotRec = "STANDBY - NO ENTRY"; } 
+    else if (isFx) { lotRec = "${roundDouble(rawUnits / 100000.0, 2)} Standard Lots"; } 
+    else if (name == "GOLD") { lotRec = "${roundDouble(rawUnits / 100.0, 2)} Contracts (Oz)"; } 
+    else if (name == "CRUDE_OIL") { lotRec = "${roundDouble(rawUnits / 1000.0, 2)} Contracts (Bbl)"; } 
+    else { lotRec = "${rawUnits.round()} Shares / Lots"; }
 
     _calculatedCards.add({
       "name": name, "rec": finalRec, "cp": entry, "rsi": roundDouble(rsiVal, 1), "bbPct": roundDouble(bbVal, 1),
-      "entry": entry, "sl": sl, "tp": tp, "lots": lotRecommendation, "dec": dec,
+      "entry": entry, "sl": sl, "tp": tp, "lots": lotRec, "dec": dec,
       "trend4h": t4h, "trend1d": t1d, "macd": macdVal > 0 ? "BULL" : "BEAR", "volTrend": vTrend,
-      "score": score,
-      "sparkline": m['sparkline'] 
+      "score": score, "sparkline": m['sparkline']
     });
   }
 
@@ -315,6 +362,13 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       appBar: AppBar(
         title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
+        actions: [
+          IconButton(
+            icon: Icon(_watchdogActive ? Icons.precision_manufacturing : Icons.precision_manufacturing_outlined, color: _watchdogActive ? Colors.greenAccent : Colors.grey),
+            onPressed: _toggleWatchdog,
+            tooltip: "Toggle Auto-Pilot Watchdog",
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -379,8 +433,10 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                     itemCount: _calculatedCards.length,
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
-                      bool isBuy = c['rec'] == "BUY"; 
-                      bool isWait = c['rec'] == "WAIT";
+                      String finalRec = c['rec'] as String;
+                      bool isBuy = finalRec == "BUY"; 
+                      bool isShort = finalRec == "SHORT";
+                      bool isEarnings = finalRec.contains("EARNINGS");
                       int dec = c['dec'] as int;
                       double currentPrice = c['cp'] as double;
                       String assetName = c['name'] as String;
@@ -394,16 +450,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                       String sl = c['sl'].toString();
                       String tp = c['tp'].toString();
                       String positionSize = c['lots'] as String;
-                      String scoreStr = (c['score'] as double).toStringAsFixed(1);
                       List<double> sparklineData = c['sparkline'] as List<double>;
 
-                      Color sigColor = isWait ? Colors.grey : (isBuy ? Colors.greenAccent : Colors.redAccent);
+                      Color sigColor = Colors.blueGrey[300]!; 
+                      if (isBuy) sigColor = Colors.greenAccent;
+                      else if (isShort) sigColor = Colors.redAccent;
+                      else if (isEarnings) sigColor = Colors.amber;
 
                       return Card(
                         color: const Color(0xFF1A1A22), margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8), 
-                          side: BorderSide(color: isWait ? Colors.grey.withOpacity(0.3) : (isBuy ? Colors.green.withOpacity(0.4) : Colors.red.withOpacity(0.4)))
+                          side: BorderSide(color: sigColor.withOpacity(0.4))
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(14.0),
@@ -422,8 +480,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                     ),
                                   ),
                                   const SizedBox(width: 14),
-                                  Text(isWait ? "WAIT ($scoreStr)" : (isBuy ? "BUY ($scoreStr)" : "SHORT ($scoreStr)"), 
-                                       style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text(finalRec, style: TextStyle(color: sigColor, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const Divider(color: Colors.grey, thickness: 0.3, height: 16),
@@ -459,18 +516,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Text("Entry: " + entry, style: TextStyle(color: isWait ? Colors.grey : Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("SL: " + sl, style: TextStyle(color: isWait ? Colors.grey : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(width: 14),
-                                  Text("TP: " + tp, style: TextStyle(color: isWait ? Colors.grey : Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Container(
                                 width: double.infinity, padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: TextStyle(color: isWait ? Colors.grey : Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                               )
                             ],
                           ),
