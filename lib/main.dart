@@ -31,15 +31,18 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
   final Map<String, String> _masterWatchlist = {
-    "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD",
-    "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL",
-    "NETFLIX": "NFLX", "BERKSHIRE": "BRK/B", "GOLD": "XAU/USD", "SILVER": "XAG/USD",
-    "PLATINUM": "XPT/USD", "CRUDE_OIL": "WTICO/USD", "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD",
-    "USDCAD": "USD/CAD", "USDCHF": "USD/CHF", "NZDUSD": "NZD/USD",
-    "EURGBP": "EUR/GBP", "EURJPY": "EUR/JPY", "GBPJPY": "GBPJPY",
+    "NVIDIA": "NVDA", "TESLA": "TSLA", "APPLE": "AAPL", "AMD": "AMD", 
+    "MICROSOFT": "MSFT", "AMAZON": "AMZN", "META": "META", "GOOGLE": "GOOGL", 
+    "NETFLIX": "NFLX", "BERKSHIRE": "BRK/B", "GOLD": "XAU/USD", "SILVER": "XAG/USD", 
+    "PLATINUM": "XPT/USD", "CRUDE_OIL": "WTICO/USD", "EURUSD": "EUR/USD", 
+    "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY", "AUDUSD": "AUD/USD", 
+    "USDCAD": "USD/CAD", "USDCHF": "USD/CHF", "NZDUSD": "NZD/USD", 
+    "EURGBP": "EUR/GBP", "EURJPY": "EUR/JPY", "GBPJPY": "GBPJPY", 
     "AUDJPY": "AUD/JPY", "GBPAUD": "GBP/AUD"
   };
+
+  final String _tdApiKey = "a9eeefb4ba19452b91adb75330fb05ae";
+  final String _fmpApiKey = "pBDGnhUIlqmO80RrVIAa9YSROILUApn";
 
   @override
   void initState() {
@@ -61,7 +64,7 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
   }
 
   Future<Map<String, dynamic>?> _processAssetMetrics(String name, String ticker) async {
-    final url4h = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=4h&outputsize=200&apikey=a9eeefb4ba19452b91adb75330fb05ae";
+    final url4h = "https://api.twelvedata.com/time_series?symbol=$ticker&interval=4h&outputsize=200&apikey=$_tdApiKey";
     try {
       final res = await http.get(Uri.parse(url4h)).timeout(const Duration(seconds: 5));
       final data = jsonDecode(res.body);
