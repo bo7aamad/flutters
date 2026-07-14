@@ -8,76 +8,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
+      with: { distribution: 'temurin', java-version: '17' }
+    - uses: subosito/flutter-action@v2
+      with: { flutter-version: '3.19.x', channel: 'stable' }
 
-    - name: Set up Java Development Kit 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Set up Google Flutter SDK
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.19.x'
-        channel: 'stable'
-
-    - name: Backup Custom Quantitative Code
-      run: cp lib/main.dart main.dart.bak
-
-    - name: Clear Old Config Baselines
-      run: rm -rf pubspec.yaml android ios web windows macos linux
-
-    - name: Generate Android Native Templates
-      run: flutter create --org com.malsalamah --project-name quant_workstation .
-
-    - name: Inject Package Dependencies
+    - name: Clean and Generate
       run: |
-        flutter pub add http:1.2.0
-        flutter pub add intl:^0.19.0
-        flutter pub add flutter_local_notifications:^17.0.1
-
-    # THE BULLETPROOF ICON REPLACEMENT
-    - name: Apply Custom Icon and Rename
-      run: |
-        # Rename the App
-        sed -i 's/android:label=".*"/android:label="ZEUS V3"/' android/app/src/main/AndroidManifest.xml
+        flutter pub get
+        flutter pub add http:1.2.0 intl:^0.19.0 flutter_local_notifications:^17.0.1 flutter_launcher_icons:^0.13.1
+        flutter pub run flutter_launcher_icons
+        flutter create .
         
-        # Replace Android Icons
-        cp assets/icon/app_icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
-        cp assets/icon/app_icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
-        cp assets/icon/app_icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
-        cp assets/icon/app_icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
-        cp assets/icon/app_icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
-
-    - name: Modernize Android Target and Compile SDK Versions
-      run: |
-        python3 -c "
-        import os
-        path = 'android/app/build.gradle'
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                content = f.read()
-            content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 35')
-            content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 35')
-            with open(path, 'w') as f:
-                f.write(content)
-        "
-
-    - name: Restore Custom Quantitative Code
-      run: |
-        mkdir -p lib
-        cp main.dart.bak lib/main.dart
-
-    - name: Clean Build Cache Environment
-      run: flutter clean
-
-    - name: Compile Native Android Machine Binary
+    - name: Compile
       run: flutter build apk --debug
 
-    - name: Upload Standalone Mobile Installer Artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
-        name: ZEUS_V3_Production_Build
+        name: Zeus-Workstation-APK
         path: build/app/outputs/flutter-apk/app-debug.apk
