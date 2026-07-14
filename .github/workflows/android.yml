@@ -9,49 +9,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
     - uses: actions/setup-java@v4
-      with: 
-        distribution: 'temurin'
-        java-version: '17'
-        
+      with: { distribution: 'temurin', java-version: '17' }
     - uses: subosito/flutter-action@v2
-      with: 
-        flutter-version: '3.19.x'
-        channel: 'stable'
+      with: { flutter-version: '3.19.x', channel: 'stable' }
 
-    - name: Generate Native Folders FIRST
-      run: flutter create --org com.malsalamah --project-name zeus_workstation .
-
-    - name: Inject Dependencies and Generate Configs
+    - name: Setup Workspace
       run: |
+        flutter create --org com.malsalamah --project-name zeus_workstation .
         flutter pub get
         flutter pub add http:1.2.0 intl:^0.19.0 flutter_local_notifications:^17.0.1 flutter_launcher_icons:^0.13.1
         flutter pub run flutter_launcher_icons
         
-    - name: Modernize Android Target SDK & Force Display Name
+    - name: Fix Android and Display Name
       run: |
         python3 -c "
         import os
-        
-        # 1. Upgrade Android SDK
-        gradle_path = 'android/app/build.gradle'
-        if os.path.exists(gradle_path):
-            with open(gradle_path, 'r') as f:
-                content = f.read()
-            content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
-            content = content.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 34')
-            with open(gradle_path, 'w') as f:
-                f.write(content)
-                
-        # 2. Force App Display Name in Manifest
-        manifest_path = 'android/app/src/main/AndroidManifest.xml'
-        if os.path.exists(manifest_path):
-            with open(manifest_path, 'r') as f:
-                content = f.read()
-            content = content.replace('android:label=\"zeus_workstation\"', 'android:label=\"Zeus\'s Workstation\"')
-            with open(manifest_path, 'w') as f:
-                f.write(content)
+        path = 'android/app/build.gradle'
+        with open(path, 'r') as f: content = f.read()
+        content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
+        with open(path, 'w') as f: f.write(content)
+        manifest = 'android/app/src/main/AndroidManifest.xml'
+        with open(manifest, 'r') as f: content = f.read()
+        content = content.replace('android:label=\"zeus_workstation\"', 'android:label=\"Zeus\'s Workstation\"')
+        with open(manifest, 'w') as f: f.write(content)
         "
         
     - name: Compile
