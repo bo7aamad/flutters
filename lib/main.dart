@@ -140,14 +140,23 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
       double resis = rawHighs.isNotEmpty ? rawHighs.sublist(math.max(0, rawHighs.length - 20)).reduce(math.max) : cp;
       double supp = rawLows.isNotEmpty ? rawLows.sublist(math.max(0, rawLows.length - 20)).reduce(math.min) : cp;
 
-      // Volume Extraction and Processing
+      // Volume Extraction and Processing (PATCHED)
       final indVol = ind4h['volume'] ?? [];
       List<double> vols = [];
       for (var v in indVol) { if (v != null) vols.add((v as num).toDouble()); }
-      double currentVol = vols.isNotEmpty ? vols.last : 0;
+      
+      // Use the last COMPLETED candle, not the live forming one
+      double refVol = vols.length > 1 ? vols[vols.length - 2] : (vols.isNotEmpty ? vols.last : 0);
       double smaVol20 = _calculateLastSMA(vols, 20);
-      String volTrend = (currentVol > smaVol20 && currentVol > 0) ? "HIGH" : "LOW";
-
+      
+      String volTrend = "LOW";
+      if (refVol == 0 || smaVol20 == 0) {
+        // Bypass filter for Forex/Commodities where YF returns 0 volume
+        volTrend = "N/A"; 
+      } else if (refVol >= (smaVol20 * 0.75)) { 
+        // 75% of average is considered healthy continuation volume
+        volTrend = "HIGH";
+      }
       return {
         "name": name, "cp": cp, "rsi": rsi, "bbPct": bbPct, "atr": atr, "macdHist": macdHist,
         "trend4h": trend4h, "trend1d": trend1d, "resis": resis, "supp": supp, "volTrend": volTrend
