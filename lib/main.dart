@@ -302,20 +302,21 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (rsiVal < 45) score += 1.0; if (rsiVal > 55) score -= 1.0;
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
-    String finalRec = "WAIT (SCORE: ${score.toStringAsFixed(1)})";
-    if (score >= 1.5) finalRec = "BUY";
-    else if (score <= -1.5) finalRec = "SHORT";
+    String scoreStr = score.toStringAsFixed(1);
+    String finalRec = "WAIT (SCORE: $scoreStr)";
+    if (score >= 1.5) finalRec = "BUY ($scoreStr)";
+    else if (score <= -1.5) finalRec = "SHORT ($scoreStr)";
 
     // X-RAY TRANSPARENCY
-    if (finalRec == "BUY" && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
-    if (finalRec == "SHORT" && t1d == "BULL") finalRec = "WAIT (1D-BULL)";
-    if (vTrend == "LOW" && (finalRec == "BUY" || finalRec == "SHORT")) finalRec = "WAIT (LOW VOL)";
+    if (finalRec.startsWith("BUY") && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
+    if (finalRec.startsWith("SHORT") && t1d == "BULL") finalRec = "WAIT (1D-BULL)";
+    if (vTrend == "LOW" && (finalRec.startsWith("BUY") || finalRec.startsWith("SHORT"))) finalRec = "WAIT (LOW VOL)";
     
     bool hasEarnings = _earningsRiskList.contains(ticker.split("/")[0]);
     if (hasEarnings) { finalRec = "WAIT (EARNINGS)"; }
 
-    if ((finalRec == "BUY" || finalRec == "SHORT") && _watchdogActive) {
-      _sendPushAlert("QUANT SIGNAL: $finalRec", "${m['name']} Confluence Score: ${score.toStringAsFixed(1)}");
+    if ((finalRec.startsWith("BUY") || finalRec.startsWith("SHORT")) && _watchdogActive) {
+      _sendPushAlert("QUANT SIGNAL: $finalRec", "${m['name']} Confluence Score: $scoreStr");
     }
 
     String name = m['name'] as String;
@@ -329,9 +330,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     double sl = 0; 
     double tp = 0;
 
-    if (finalRec == "BUY") {
+    if (finalRec.startsWith("BUY")) {
       sl = math.min(entry - (atrVal * 2.0), supp - (atrVal * 0.5)); tp = entry + ((entry - sl).abs() * 2.0); 
-    } else if (finalRec == "SHORT") {
+    } else if (finalRec.startsWith("SHORT")) {
       sl = math.max(entry + (atrVal * 2.0), resis + (atrVal * 0.5)); tp = entry - ((sl - entry).abs() * 2.0);
     } else {
       sl = entry - (atrVal * 2.0); tp = entry + (atrVal * 2.0);
@@ -441,8 +442,8 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                     itemBuilder: (context, idx) {
                       final c = _calculatedCards[idx];
                       String finalRec = c['rec'] as String;
-                      bool isBuy = finalRec == "BUY"; 
-                      bool isShort = finalRec == "SHORT";
+                      bool isBuy = finalRec.startsWith("BUY"); 
+                      bool isShort = finalRec.startsWith("SHORT");
                       bool isEarnings = finalRec.contains("EARNINGS");
                       int dec = c['dec'] as int;
                       double currentPrice = c['cp'] as double;
