@@ -23,7 +23,7 @@ jobs:
         flutter-version: '3.19.x'
         channel: 'stable'
 
-    - name: Backup Custom Quantitative Code
+    - name: Backup Custom Assets
       run: |
         cp lib/main.dart main.dart.bak
         cp flutter_launcher_icons.yaml flutter_launcher_icons.yaml.bak
@@ -48,12 +48,13 @@ jobs:
 
     - name: Set App Name
       run: |
+        # Use a more reliable way to update the AndroidManifest
         sed -i 's/android:label=".*"/android:label="ZEUS V5"/' android/app/src/main/AndroidManifest.xml
 
-    # UPGRADE: Explicitly point to the config file
+    # FIX: Run icon generator targeting ONLY our config file
     - name: Generate App Icon
       run: |
-        flutter pub run flutter_launcher_icons -f flutter_launcher_icons.yaml
+        flutter pub run flutter_launcher_icons --file flutter_launcher_icons.yaml
 
     - name: Modernize Android Target and Compile SDK Versions
       run: |
@@ -78,5 +79,5 @@ jobs:
     - name: Upload Standalone Mobile Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ZEUS_V5_Production_Build
+        name: ZEUS_V5_Final_Build
         path: build/app/outputs/flutter-apk/app-debug.apk
