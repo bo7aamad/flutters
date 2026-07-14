@@ -103,7 +103,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
 
   Future<String> _calculateMacroSentiment() async {
     int bull = 0; int bear = 0;
-    // RESTORED: All 6 Feeds
     final List<String> feeds = [
       "https://finance.yahoo.com/rss/topstories", 
       "https://rss.marketwatch.com/rss/topstories",
@@ -304,8 +303,9 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     if (bbVal < 30) score += 1.0; if (bbVal > 70) score -= 1.0;
 
     String finalRec = "WAIT (SCORE: ${score.toStringAsFixed(1)})";
-    if (score >= 1.5) finalRec = "BUY";
-    else if (score <= -1.5) finalRec = "SHORT";
+    // RESTORED: Strict Quantitative Math Threshold (+/- 2.0)
+    if (score >= 2.0) finalRec = "BUY";
+    else if (score <= -2.0) finalRec = "SHORT";
 
     // X-RAY TRANSPARENCY
     if (finalRec == "BUY" && t1d == "BEAR") finalRec = "WAIT (1D-BEAR)";
@@ -356,15 +356,50 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
     });
   }
 
+  // RESTORED: The "About" Dialog configured with your specific background details
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text("ABOUT ZEUS WORKSTATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const SingleChildScrollView(
+          child: Text(
+            "Zeus Workstation wasn’t born on a trading floor, but in the demanding world of gas turbine engineering. In industrial engineering, precision is absolute and there is zero tolerance for emotional decision-making. I realized the financial markets operate on the exact same principles of momentum, pressure, and structural integrity. I built Zeus Workstation to eliminate the noise and guesswork of retail trading, translating rigorous, data-driven telemetry into a centralized quantitative command system. We trade without emotion, executing only when the math aligns.\n\n"
+            "OUR QUANTITATIVE METHODOLOGY:\n\n"
+            "• Algorithmic Macro-Sentiment: We scrape live institutional feeds to calculate a real-time economic bias, ensuring we never trade against macroeconomic headwinds.\n\n"
+            "• Multi-Timeframe Confluence: We cross-reference daily and 4-hour structural trends, executing only when both timeframes lock into a \"Golden Confluence.\"\n\n"
+            "• Volatility-Adjusted Sizing: Using the Average True Range (ATR), the engine dynamically calculates precise stop-losses and position sizes to automatically protect capital during high volatility.\n\n"
+            "• Institutional Volume Verification: We pull real tick data to verify that every breakout is backed by actual market volume, filtering out fake signals and traps.\n\n"
+            "• Dynamic Structural Banding: We combine Bollinger Band positioning with automated support and resistance calculations to pinpoint our exact entry and exit coordinates.",
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("CLOSE", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+          )
+        ],
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121216),
       appBar: AppBar(
-        // RESTORED: Fixed App Name
         title: const Text("ZEUS WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
         actions: [
+          // RESTORED: The Missing About Page Icon
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.grey),
+            onPressed: () => _showAboutDialog(context),
+            tooltip: "About Quantitative Methodology",
+          ),
           IconButton(
             icon: Icon(_watchdogActive ? Icons.precision_manufacturing : Icons.precision_manufacturing_outlined, color: _watchdogActive ? Colors.greenAccent : Colors.grey),
             onPressed: _toggleWatchdog,
@@ -372,7 +407,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
           )
         ],
       ),
-      // RESTORED: Your Entire UI ListView
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
