@@ -14,25 +14,27 @@ jobs:
     - uses: subosito/flutter-action@v2
       with: { flutter-version: '3.19.x', channel: 'stable' }
 
-    - name: Setup Workspace
+    - name: Prepare and Build
       run: |
         flutter create --org com.malsalamah --project-name zeus_workstation .
         flutter pub get
         flutter pub add http:1.2.0 intl:^0.19.0 flutter_local_notifications:^17.0.1 flutter_launcher_icons:^0.13.1
         flutter pub run flutter_launcher_icons
         
-    - name: Fix Android and Display Name
+    - name: Modernize SDK and Set Display Name
       run: |
         python3 -c "
         import os
+        # Set SDK to 34
         path = 'android/app/build.gradle'
-        with open(path, 'r') as f: content = f.read()
-        content = content.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
-        with open(path, 'w') as f: f.write(content)
+        with open(path, 'r') as f: c = f.read()
+        c = c.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 34')
+        with open(path, 'w') as f: f.write(c)
+        # Set Display Name
         manifest = 'android/app/src/main/AndroidManifest.xml'
-        with open(manifest, 'r') as f: content = f.read()
-        content = content.replace('android:label=\"zeus_workstation\"', 'android:label=\"Zeus\'s Workstation\"')
-        with open(manifest, 'w') as f: f.write(content)
+        with open(manifest, 'r') as f: c = f.read()
+        c = c.replace('android:label=\"zeus_workstation\"', 'android:label=\"Zeus\'s Workstation\"')
+        with open(manifest, 'w') as f: f.write(c)
         "
         
     - name: Compile
