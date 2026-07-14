@@ -363,7 +363,6 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
         title: const Text("QUANT CONFLUENCE WORKSTATION", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
         backgroundColor: const Color(0xFF1A1A22), centerTitle: true, elevation: 4,
         actions: [
-          // NEW: About Page Navigation Icon
           IconButton(
             icon: const Icon(Icons.info_outline, color: Colors.grey),
             onPressed: () {
@@ -515,4 +514,168 @@ class _QuantWorkstationState extends State<QuantWorkstation> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: vol == "HIGH" ? Colors.purple.withOpacity(0.15) : Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                    child: Text("VOL: " + vol, style: TextStyle(color:
+                                    child: Text("VOL: " + vol, style: TextStyle(color: vol == "HIGH" ? Colors.purpleAccent : Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text("• Price : \$ " + currentPrice.toStringAsFixed(dec) + " | RSI : " + rsi + " | BB Loc : " + bb + "%", style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text("Entry: " + entry, style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+                                  Text("SL: " + sl, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(width: 14),
+                                  Text("TP: " + tp, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity, padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                child: Text("RECOMMENDED POSITION SIZING: " + positionSize, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 8.0, bottom: 2.0),
+              child: Text(
+                "Built by M.AlSalamah",
+                style: TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 1.2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SparklinePainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+
+  SparklinePainter(this.data, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+
+    List<double> cleanData = [];
+    double lastValid = data.firstWhere((e) => e > 0, orElse: () => 1.0);
+    for (double d in data) {
+      if (d > 0) { cleanData.add(d); lastValid = d; }
+      else { cleanData.add(lastValid); }
+    }
+
+    final double min = cleanData.reduce(math.min);
+    final double max = cleanData.reduce(math.max);
+    final double range = (max - min) == 0 ? 1 : (max - min);
+    final double xStep = size.width / (cleanData.length - 1);
+
+    final Path linePath = Path();
+    for (int i = 0; i < cleanData.length; i++) {
+      final double x = i * xStep;
+      final double y = size.height - ((cleanData[i] - min) / range * size.height);
+      if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
+    }
+
+    final Path fillPath = Path.from(linePath);
+    fillPath.lineTo(size.width, size.height);
+    fillPath.lineTo(0, size.height);
+    fillPath.close();
+
+    final Paint fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..shader = ui.Gradient.linear(
+        const Offset(0, 0),
+        Offset(0, size.height),
+        [color.withOpacity(0.4), color.withOpacity(0.0)],
+      );
+      
+    final Paint linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(linePath, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class AboutScreen extends StatelessWidget {
+  const AboutScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121216),
+      appBar: AppBar(
+        title: const Text("SYSTEM ARCHITECTURE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16, letterSpacing: 1.1)),
+        backgroundColor: const Color(0xFF1A1A22),
+        centerTitle: true,
+        elevation: 4,
+        iconTheme: const IconThemeData(color: Colors.white), 
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("About Zeus Workstation", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            const Text(
+              "Zeus Workstation wasn’t born on a trading floor, but in the demanding world of gas turbine engineering. In industrial engineering, precision is absolute and there is zero tolerance for emotional decision-making. I realized the financial markets operate on the exact same principles of momentum, pressure, and structural integrity.\n\nI built Zeus Workstation to eliminate the noise and guesswork of retail trading, translating rigorous, data-driven telemetry into an automated quantitative command system. We trade without emotion, executing only when the math aligns.",
+              style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.6),
+            ),
+            const SizedBox(height: 32),
+            const Divider(color: Colors.white24, thickness: 1),
+            const SizedBox(height: 24),
+            const Text("Our Quantitative Methodology", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            _buildBulletPoint("Algorithmic Macro-Sentiment", "We continually scrape live institutional feeds to calculate a real-time economic bias, ensuring we never trade against macroeconomic headwinds."),
+            _buildBulletPoint("Multi-Timeframe Confluence & X-Ray", "We cross-reference daily and 4-hour structural trends, executing only when both lock into a 'Golden Confluence.' Our X-Ray UI provides algorithmic transparency, explicitly detailing exactly which hard-filter is holding an asset in standby."),
+            _buildBulletPoint("Fundamental Earnings Radar", "Technicals mean nothing during a fundamental gap. The engine continuously scans global corporate calendars, automatically blocking trade entries if an asset is within five days of an earnings report."),
+            _buildBulletPoint("Institutional Volume Verification", "We pull real tick data to verify that every breakout is backed by actual market volume, automatically filtering out fake signals and trapping chops."),
+            _buildBulletPoint("Volatility-Adjusted Sizing", "Using the Average True Range (ATR), the engine dynamically calculates precise stop-losses and position sizes to automatically protect capital during high-volatility environments."),
+            _buildBulletPoint("Autonomous Watchdog Telemetry", "The workstation does not sleep. Our background auto-pilot scans the entire market grid every 60 minutes, calculating dynamic threshold scores and deploying push notifications the exact moment a high-probability setup emerges."),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBulletPoint(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("• ", style: TextStyle(color: Color(0xFF007A53), fontSize: 22, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5),
+                children: [
+                  TextSpan(text: "$title: ", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  TextSpan(text: description),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
